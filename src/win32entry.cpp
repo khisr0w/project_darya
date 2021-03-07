@@ -9,6 +9,7 @@
 #include "windows.h"
 
 typedef int int32;
+typedef unsigned char uint8;
 typedef unsigned int uint32;
 typedef int bool32;
 typedef float real32;
@@ -19,6 +20,8 @@ typedef float real32;
 
 #include "commons.h"
 #include "lexer.cpp"
+#include "parser.cpp"
+
 
 // NOTE(Khisrow): Globals
 HANDLE GLOBALConsoleOutputHandle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -124,10 +127,16 @@ int main(int argc, char *argv[])
 	LexerState.Tokens.MemorySize = Megabytes(10);
 	LexerState.Tokens.MemoryBase = (token *)VirtualAlloc(0, LexerState.Tokens.MemorySize,
 														 MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-
+	Assert(LexerState.Tokens.MemoryBase);
 	//NOTE(Khisrow): Text Memory
 	uint32 TextSize = Megabytes(10);
 	char *TextMemory = (char *)VirtualAlloc(0, TextSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+	Assert(TextMemory);
+
+	parser_state ParserState = {};
+	ParserState.MaxASTSize = Megabytes(10);
+	ParserState.ASTMemory = (uint8 *)VirtualAlloc(0, ParserState.MaxASTSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+	Assert(ParserState.ASTMemory);
 
 	//if(StringCompare(argv[1], "shell"))
 	{
@@ -159,11 +168,13 @@ int main(int argc, char *argv[])
 				else if(StringCompare(ReadData.Input, "\r\n")) {}
 				else
 				{
+					// NOTE(Khisrow): Lexer and Tokenizer
 					char FileName[MAX_PATH] = "<stdin>"; while(FileName[0] == 1) return 0;
 					InitializeLexer(&LexerState, FileName, TextMemory);
 					op_status LexerStatus = PopulateTokens(&LexerState);
 					if(LexerStatus.Success)
 					{
+						String[0] = '\0';
 						for(token *Token = LexerState.Tokens.MemoryBase;
 							Token->Type != TT_EOF;
 							++Token)
@@ -172,6 +183,11 @@ int main(int argc, char *argv[])
 						}
 						Concat(String, true, "\n");
 						Win32StdOut(String);
+
+						//NOTE(Khisrow): Parser and AST
+						InitializeParser(&ParserState, &LexerState.Tokens);
+						parser_result AST = ParseTokens(&ParserState);
+						if(AST.Error.Type != NoError) Win32StdOut(AST.Error.Message);
 					}
 					else 
 					{

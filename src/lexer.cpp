@@ -110,12 +110,13 @@ CreateNumber(lexer_state *LexerState, char *Dest)
 }
 #endif
 
-#define MakeError(MessageType, Message) MakeError_(#MessageType ": ", Message)
+#define MakeError(ErrorType, Message) MakeError_(#ErrorType ": ", Message, ErrorType)
 inline error
-MakeError_(char * MessageType, char *Message)
+MakeError_(char * MessageHeader, char *Message, error_type ErrorType)
 {
 	error Error = {};
-	Concat(Error.Message, false, MessageType, Message);
+	Error.Type = ErrorType;
+	Concat(Error.Message, false, MessageHeader, Message);
 
 	return Error;
 }

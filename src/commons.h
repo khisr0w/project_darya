@@ -12,6 +12,7 @@
 
 #if DEBUG
 #define Assert(Expression) if(!(Expression)) {*(int*)0 = 0;}
+#define InvalidCodePath Assert(!"InvalidCodePath")
 #else
 #define Assert(Expression)
 #endif

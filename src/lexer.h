@@ -66,7 +66,9 @@ struct token_list
 
 enum error_type
 {
+	NoError,
 	CharacterError,
+	InvalidSyntaxError,
 };
 
 struct error

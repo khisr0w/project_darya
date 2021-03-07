@@ -1,25 +1,58 @@
 /*  +======| File Info |===============================================================+
     |                                                                                  |
-    |     Subdirectory:  /WinConsole                                                   |
-    |    Creation date:  2/28/2021 1:58:15 AM                                          |
+    |     Subdirectory:  /src                                                          |
+    |    Creation date:  3/4/2021 6:40:34 AM                                           |
     |    Last Modified:                                                                |
     |                                                                                  |
     +=====================| Sayed Abid Hashimi, Copyright © All rights reserved |======+  */
 
-#include "windows.h"
+#if !defined(COMMONS_H)
 
-typedef int int32;
-typedef int bool32;
-typedef float real32;
+#define MAX_FILENAME 260
 
-#define internal static
-#define ArrayCount(Array) sizeof((Array)) / sizeof((Array)[0])
+#if DEBUG
+#define Assert(Expression) if(!(Expression)) {*(int*)0 = 0;}
+#else
+#define Assert(Expression)
+#endif
 
-#define MAX_STRING 1024
+#define ArrayCount(Array) (sizeof((Array)) / sizeof((Array)[0]))
 
-// NOTE(Khisrow): Globals
-HANDLE GLOBALConsoleOutputHandle = GetStdHandle(STD_OUTPUT_HANDLE);
-HANDLE GLOBALConsoleInputHandle = GetStdHandle(STD_INPUT_HANDLE);
+#define Kilobytes(Value) ((Value) * 1024LL)
+#define Megabytes(Value) (Kilobytes(Value) * 1024LL)
+#define Gigabytes(Value) (Megabytes(Value) * 1024LL)
+#define Terabytes(Value) (Gigabytes(Value) * 1024LL)
+
+
+#define Concat(Dest, Bool, ...) Concat_(Dest, Bool, ArrayCount(Dest), __VA_ARGS__)
+#define Concat_(Dest, Bool, Length, ...) {\
+												 Assert(Dest);\
+									   		     char *Dest1 = Dest;\
+												 int32 StartLength = 0;\
+												 if(Bool == true)\
+												 {\
+													 StartLength = StringLength(Dest1);\
+												 }\
+												 Dest1 += StartLength;\
+									   		     int32 TotalLength = 0;\
+												 int32 DestLength = Length;\
+									   		     char *Temp[] = {__VA_ARGS__};\
+									   		     int32 StrCount = ArrayCount(Temp);\
+									   		     for(int32 StrIndex = 0; StrIndex < StrCount; ++StrIndex)\
+									   		     {\
+									   		  	   TotalLength += StringLength(Temp[StrIndex]);\
+									   		     }\
+									   		     Assert(TotalLength < (DestLength - StartLength));\
+									   		     if(Dest1)\
+									   		     {\
+									   		  	   for(int32 StrIndex = 0; StrIndex < StrCount; ++StrIndex)\
+									   		  	   {\
+									   		  		   char *String = Temp[StrIndex];\
+									   		  		   while(*String) *Dest1++ = *String++;\
+									   		  	   }\
+									   		  	   *Dest1 = '\0';\
+									   		     }\
+											}
 
 inline int32
 StringLength(char *String)
@@ -37,7 +70,40 @@ StringLength(char *String)
 	return Result;
 }
 
-inline bool32
+inline void
+CopyToString(char Source, char *Dest, int32 DestListLength = -1)
+{
+	int32 DestLength = DestListLength;
+	if(DestListLength == -1)
+	{
+		DestLength = StringLength(Dest);
+	}
+	Assert(DestLength > 0);
+
+	*Dest++ = Source;
+	*Dest = '\0';
+}
+
+inline void
+CopyToString(char *Source, char *Dest, int32 DestListLength)
+{
+	int32 SourceLength = StringLength(Source);
+	int32 DestLength = DestListLength;
+	if(DestListLength == -1)
+	{
+		DestLength = StringLength(Dest);
+	}
+
+	Assert(SourceLength <= DestLength);
+
+	while(*Source)
+	{
+		*Dest++ = *Source++;
+	}
+	*Dest = '\0';
+}
+
+internal bool32
 StringCompare(char * A, char *B)
 {
 	if(A && B)
@@ -65,19 +131,54 @@ StringCompare(char * A, char *B)
 	return false;
 }
 
-// TODO(Khisrow): The Result is only 1024 characters, should it be increased?
-inline void
-StringConcat(char *A, char *B, char *Dest)
+inline bool32
+CharToListCompare(char Char, char *List, int32 ListLength, int32 *FoundIndex = 0)
 {
-	if(A && B)
+	for(int32 Index = 0;
+		Index < ListLength;
+		++Index)
+	{
+		if(Char == List[Index])
+		{
+			if(FoundIndex) *FoundIndex = Index;
+			return true;
+		}
+	}
+
+	return false;
+}
+
+inline char *
+StringConcat(char A, char *B, char *Dest)
+{
+	if(B && Dest)
 	{
 		int Index = 0;
-		while(*A) Dest[Index++] = *A++;
-		while(*B) Dest[Index++] = *B++;
+		*Dest++ = A;
+		while(*B) *Dest++ = *B++;
 
-		Dest[Index] = '\0';
+		*Dest = '\0';
 	}
+
+	return Dest;
 }
+
+#if 0
+inline char *
+StringConcat(char *A, char *B, char *Dest)
+{
+	if(A && B && Dest)
+	{
+		int Index = 0;
+		while(*A) *Dest++ = *A++;
+		while(*B) *Dest++ = *B++;
+
+		*Dest = '\0';
+	}
+
+	return Dest;
+}
+#endif
 
 inline int32
 Power(int32 Base, int32 Power)
@@ -90,50 +191,6 @@ Power(int32 Base, int32 Power)
 	while(--Power > 0)
 	{
 		Result *= Base;
-	}
-
-	return Result;
-}
-
-struct to_int_result
-{
-	bool32 Valid;
-	int32 Value;
-};
-inline to_int_result
-ToInt(char *String)
-{
-	to_int_result Result {};
-
-	int32 Length = StringLength(String);
-	if(Length > 0)
-	{
-		int32 Value = 0;
-		int32 Sign = 1;
-		if((int32)(*String - 45) == 0)
-		{
-			Sign = -1;
-			--Length;
-			++String;
-		}
-
-		for(int32 RaisedAmount = Length - 1;
-			RaisedAmount >= 0;
-			--RaisedAmount)
-		{
-			int32 Integer = (int32)((*String++) - 48);
-			if((Integer >= 0) && (Integer <= 9))
-			{
-				Integer *= Power(10, RaisedAmount);
-				Value += Integer;
-			}
-
-			else return Result;
-		}
-
-		Value *= Sign;
-		Result.Value = Value;
-		Result.Valid = true;
 	}
 
 	return Result;
@@ -202,12 +259,59 @@ StringContains(char *String, char Char, int32 Index = -1)
 	return Result;
 }
 
+
+// TODO(Khisrow): These needs to change to a more robust and efficient
+// algorithms for conversion.
+struct to_int_result
+{
+	bool32 Valid;
+	int32 Value;
+};
+internal to_int_result
+ToInt(char *String)
+{
+	to_int_result Result {};
+
+	int32 Length = StringLength(String);
+	if(Length > 0)
+	{
+		int32 Value = 0;
+		int32 Sign = 1;
+		if((int32)(*String - 45) == 0)
+		{
+			Sign = -1;
+			--Length;
+			++String;
+		}
+
+		for(int32 RaisedAmount = Length - 1;
+			RaisedAmount >= 0;
+			--RaisedAmount)
+		{
+			int32 Integer = (int32)((*String++) - 48);
+			if((Integer >= 0) && (Integer <= 9))
+			{
+				Integer *= Power(10, RaisedAmount);
+				Value += Integer;
+			}
+
+			else return Result;
+		}
+
+		Value *= Sign;
+		Result.Value = Value;
+		Result.Valid = true;
+	}
+
+	return Result;
+}
+
 struct to_real_result
 {
 	bool32 Valid;
 	real32 Value;
 };
-inline to_real_result
+internal to_real_result
 ToReal(char *String)
 {
 	to_real_result Result = {};
@@ -246,6 +350,19 @@ ToReal(char *String)
 		Result.Valid = true;
 		Result.Value = Value;
 	}
+
+	return Result;
+}
+
+inline char *
+ToString(char Char, char* Dest)
+{
+	Assert(Dest);
+	char Result[2];
+	Result[0] = Char;
+	Result[1] = '\0';
+
+	Dest = Result;
 
 	return Result;
 }
@@ -307,122 +424,6 @@ ToString(real32 Value, char *String)
 	return String;
 }
 
-internal void
-Win32StdOut(char *Text)
-{
-	DWORD CharRead;
-	WriteConsole(GLOBALConsoleOutputHandle, Text, StringLength(Text), NULL, NULL);
-}
 
-// TODO(Khisrow): The Input takes only 1024 characters, should it be increased?
-struct win32_console_stdin
-{
-	char Input[1024];
-	DWORD CharRead;
-};
-
-internal win32_console_stdin
-Win32StdIn()
-{
-	win32_console_stdin Result = {};
-	ReadConsole(GLOBALConsoleInputHandle, Result.Input,
-				ArrayCount(Result.Input) + sizeof(char),
-				&Result.CharRead, NULL);
-
-	return Result;
-}
-
-#if 0
-BOOL WINAPI
-HandlerRoutine(DWORD CtrlType)
-{
-	switch (CtrlType)
-	{
-		case CTRL_C_EVENT:
-		{
-			Beep(750, 300);
-			return true;
-		}
-
-		default:
-		{
-			return false;
-		}
-	}
-}
+#define COMMONS_H
 #endif
-
-internal void
-ClearScreen()
-{
-	CONSOLE_SCREEN_BUFFER_INFO ConBufferInfo = {};
-	GetConsoleScreenBufferInfo(GLOBALConsoleOutputHandle, &ConBufferInfo);
-
-	SMALL_RECT RectToMove = {};
-	RectToMove.Left = 0;
-	RectToMove.Top = 0;
-	RectToMove.Right = ConBufferInfo.dwSize.X;
-	RectToMove.Bottom = ConBufferInfo.dwSize.X;
-
-	COORD BufferOrigin = {};
-	BufferOrigin.X = -ConBufferInfo.dwSize.X;
-	BufferOrigin.Y = -ConBufferInfo.dwSize.Y;
-
-	CHAR_INFO CharFill = {};
-	CharFill.Attributes = 0;
-	CharFill.Char.AsciiChar = (char)' ';
-
-	ScrollConsoleScreenBuffer(GLOBALConsoleOutputHandle, &RectToMove, NULL, BufferOrigin, &CharFill);
-	COORD Cursor = {};
-	SetConsoleCursorPosition(GLOBALConsoleOutputHandle, Cursor);
-}
-
-int main(int argc, char *argv[])
-{
-	// NOTE(Khisrow): Input Strings
-	char String[MAX_STRING];
-	char String2[MAX_STRING];
-
-	if(GLOBALConsoleOutputHandle == INVALID_HANDLE_VALUE) return 0;
-	if(GLOBALConsoleInputHandle == INVALID_HANDLE_VALUE) return 0;
-
-	if(StringCompare(argv[1], "shell"))
-	{
-		ClearScreen();
-		SetConsoleTitle("Project Darya Shell");
-		SetConsoleCtrlHandler(NULL, true);
-
-		win32_console_stdin ReadData;
-		// Win32StdOut("Project Darya Shell Module\n\n");
-		while(true)
-		{
-			Win32StdOut("Project Darya Shell >> ");
-			ReadData = Win32StdIn();
-			if(StringCompare(ReadData.Input, "exit\r\n"))
-			{
-				Win32StdOut("\nPress Enter to exit...");
-				Win32StdIn();
-				break;
-			}
-			else if(StringCompare(ReadData.Input, "clear\r\n"))
-			{
-				ClearScreen();
-			}
-			else
-			{
-				if(StringLength(ReadData.Input) == 0)
-				{
-					Win32StdOut("\nKeyboard Interrupt voided!\n\n");
-				}
-				else if(StringCompare(ReadData.Input, "\r\n"))
-				{
-					Win32StdOut("\n");
-				}
-				else
-				{
-					Win32StdOut("ERROR: Command not found!\n\n");
-				}
-			}
-		}
-	}
-}

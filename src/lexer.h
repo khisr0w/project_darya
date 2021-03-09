@@ -69,6 +69,7 @@ enum error_type
 	NoError,
 	CharacterError,
 	InvalidSyntaxError,
+	VisitError,
 };
 
 struct error

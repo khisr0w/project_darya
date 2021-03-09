@@ -70,7 +70,6 @@ struct binary_node
 	node *LeftNode;
 	token OpToken;
 	node *RightNode;
-
 };
 
 

@@ -222,10 +222,7 @@ Factor(parser_state *ParserState)
 			OnParseRegister(&Result, Advance(ParserState));
 			return OnParseSuccess(&Result, Expression);
 		}
-		else
-		{
-			OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected ')'"));
-		}
+		else return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected ')'"));
 	}
 
 	return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected int or float"));
@@ -249,9 +246,9 @@ inline parser_result
 ParseTokens(parser_state *ParserState)
 {
 	parser_result Result = Expression(ParserState);
-	if((Result.Error.Type != NoError) && (ParserState->CurrentToken.Type != TT_EOF))
+	if((Result.Error.Type == NoError) && (ParserState->CurrentToken.Type != TT_EOF))
 	{
-		return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '+', '-', '*', '/'"));
+		return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '+', '-', '*', '/' as the operator"));
 	}
 
 	return Result;

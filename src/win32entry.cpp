@@ -18,9 +18,11 @@ typedef float real32;
 
 #define MAX_STRING 1024
 
+#include "win32entry.h"
 #include "commons.h"
 #include "lexer.cpp"
 #include "parser.cpp"
+#include "interpreter.cpp"
 
 
 // NOTE(Khisrow): Globals
@@ -35,12 +37,6 @@ Win32StdOut(char *Text)
 }
 
 // TODO(Khisrow): The Input takes only 1024 characters, should it be increased?
-struct win32_console_stdin
-{
-	char *Input;
-	DWORD CharRead;
-};
-
 internal DWORD
 Win32StdIn(char *String = 0, uint32 StringSize = 0)
 {
@@ -122,20 +118,33 @@ int main(int argc, char *argv[])
 	if(GLOBALConsoleOutputHandle == INVALID_HANDLE_VALUE) return 0;
 	if(GLOBALConsoleInputHandle == INVALID_HANDLE_VALUE) return 0;
 
-	//NOTE(Khisrow): Token Memory
+	transient_memory TransMemory = {};
+	TransMemory.MemorySize = Megabytes(10);
+
 	lexer_state LexerState = {};
 	LexerState.Tokens.MemorySize = Megabytes(10);
-	LexerState.Tokens.MemoryBase = (token *)VirtualAlloc(0, LexerState.Tokens.MemorySize,
-														 MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-	Assert(LexerState.Tokens.MemoryBase);
-	//NOTE(Khisrow): Text Memory
+
 	uint32 TextSize = Megabytes(10);
-	char *TextMemory = (char *)VirtualAlloc(0, TextSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-	Assert(TextMemory);
+
+	node_memory NodeMemory = {};
+	NodeMemory.MaxMemorySize = Megabytes(10);
+	NodeMemory.Size = 0;
+
+	uint32 TotalMemorySize = TransMemory.MemorySize + LexerState.Tokens.MemorySize +
+							  TextSize + NodeMemory.MaxMemorySize;
+
+	void *TransientMemory = VirtualAlloc(0, TotalMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+	LexerState.Tokens.MemoryBase = (token *)((uint8 *)TransientMemory + TransMemory.MemorySize);
+	char *TextMemory = (char *)((uint8 *)LexerState.Tokens.MemoryBase + LexerState.Tokens.MemorySize);
+	NodeMemory.MemoryBase = (uint8 *)TextMemory + TextSize;
 
 	parser_state ParserState = {};
-	ParserState.MaxASTSize = Megabytes(10);
-	ParserState.ASTMemory = (uint8 *)VirtualAlloc(0, ParserState.MaxASTSize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+	ParserState.ASTMemory = (uint8 *)NodeMemory.MemoryBase;
+	ParserState.MaxASTSize = NodeMemory.MaxMemorySize;
+
+	Assert(TransientMemory);
+	Assert(LexerState.Tokens.MemoryBase);
+	Assert(TextMemory);
 	Assert(ParserState.ASTMemory);
 
 	//if(StringCompare(argv[1], "shell"))
@@ -169,7 +178,7 @@ int main(int argc, char *argv[])
 				else
 				{
 					// NOTE(Khisrow): Lexer and Tokenizer
-					char FileName[MAX_PATH] = "<stdin>"; while(FileName[0] == 1) return 0;
+					char FileName[MAX_PATH] = "<stdin>";
 					InitializeLexer(&LexerState, FileName, TextMemory);
 					op_status LexerStatus = PopulateTokens(&LexerState);
 					if(LexerStatus.Success)
@@ -187,12 +196,21 @@ int main(int argc, char *argv[])
 						//NOTE(Khisrow): Parser and AST
 						InitializeParser(&ParserState, &LexerState.Tokens);
 						parser_result AST = ParseTokens(&ParserState);
-						if(AST.Error.Type != NoError) Win32StdOut(AST.Error.Message);
+						if(AST.Error.Type != NoError)
+						{
+							Concat(String, false, AST.Error.Message, "\n");
+							Win32StdOut(String);
+							return 0;
+						}
+
+						context Stack = MakeContext("<root>");
+						InterpreterVisit(&NodeMemory, AST, Stack);
 					}
 					else 
 					{
 						Concat(String, false, LexerStatus.Error.Message, "\n");
 						Win32StdOut(String);
+						return 0;
 					}
 				}
 			}

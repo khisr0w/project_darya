@@ -6,6 +6,12 @@
     |                                                                                  |
     +=====================| Sayed Abid Hashimi, Copyright © All rights reserved |======+  */
 
+
+/* NOTE(Khisrow): BUGS!!!
+
+   1. 13 * (13) SOLVED!
+   2. 5 - (2 * (24 / 6 + 4) - 4 + 5 * 3) * 4 The third time it gives = -inf SOLVED!
+*/
 #include "windows.h"
 
 typedef int int32;
@@ -158,6 +164,11 @@ int main(int argc, char *argv[])
 		// Win32StdOut("Project Darya Shell Module\n\n");
 		while(true)
 		{
+			// NOTE(Khisrow): Reset Memory
+			LexerState.Tokens.TokenCount = 0;
+			TransMemory.Size = 0;
+			NodeMemory.Size = 0;
+
 			Win32StdOut("Project Darya Shell >> ");
 			ReadData.CharRead = Win32StdIn(TextMemory, TextSize);
 
@@ -183,6 +194,7 @@ int main(int argc, char *argv[])
 					op_status LexerStatus = PopulateTokens(&LexerState);
 					if(LexerStatus.Success)
 					{
+#if 0
 						String[0] = '\0';
 						for(token *Token = LexerState.Tokens.MemoryBase;
 							Token->Type != TT_EOF;
@@ -192,7 +204,7 @@ int main(int argc, char *argv[])
 						}
 						Concat(String, true, "\n");
 						Win32StdOut(String);
-
+#endif
 						//NOTE(Khisrow): Parser and AST
 						InitializeParser(&ParserState, &LexerState.Tokens);
 						parser_result AST = ParseTokens(&ParserState);
@@ -204,7 +216,18 @@ int main(int argc, char *argv[])
 						}
 
 						context Stack = MakeContext("<root>");
-						InterpreterVisit(&NodeMemory, AST, Stack);
+						visit_result VisResult = Visit(&NodeMemory, AST.Node, &Stack);
+						if(VisResult.Error.Type != NoError)
+						{
+							Concat(String, false, AST.Error.Message, "\n");
+							Win32StdOut(String);
+							return 0;
+						}
+						void *Number = VisResult.Number->Number;
+						if(VisResult.Number->Type == NUM_FLOAT) ToString(*((real32 *)Number), String);
+						else if(VisResult.Number->Type == NUM_INT) ToString(*((int32 *)Number), String);
+						Concat(String, false, String, "\n")
+						Win32StdOut(String);
 					}
 					else 
 					{

@@ -17,6 +17,7 @@ struct context
 
 enum number_type
 {
+	NUM_DEFINED,
 	NUM_FLOAT,
 	NUM_INT,
 };
@@ -35,7 +36,7 @@ struct visit_result
 
 struct op_result
 {
-	node *Node;
+	number *Number;
 	error Error;
 };
 

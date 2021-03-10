@@ -380,11 +380,19 @@ ToString(int32 Value, char *String, int32 *StartIndex = 0, char EndChar = '\0')
 	}
 	else StrIndex = &Temp;
 
+	if(Value == 0)
+	{
+		String[(*StrIndex)++] = '0';
+		String[(*StrIndex)++] = EndChar;
+		return String;
+	}
+
 	if(Value < 0)
 	{
-		String[*StrIndex++] = '-';
+		String[(*StrIndex)++] = '-';
 		Value *= -1;
 	}
+
 
 	int32 RevIndex = 0;
 	while(Value)
@@ -409,6 +417,13 @@ ToString(real32 Value, char *String)
 {
 	int32 Mantissa = (int32)Value;
 	int32 Index = 0;
+
+	if(Value == 0)
+	{
+		String[Index++] = '0';
+		String[Index++] = '\0';
+		return String;
+	}
 	ToString(Mantissa, String, &Index, '.');
 
 	real32 Subtract = (real32)(Value - Mantissa);

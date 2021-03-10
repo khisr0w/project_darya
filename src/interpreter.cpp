@@ -24,7 +24,7 @@ MakeContext(char *DisplayName, context *Parent = 0, position *ParentPos = 0)
 inline void *
 GetNode_(node * Node)
 {
-	void *Result = (uint8 *)Node + sizeof(node *);
+	void *Result = (uint8 *)Node + sizeof(node);
 
 	return Result;
 }
@@ -41,6 +41,8 @@ PushStruct_(void *MemoryBase, uint32 *MemorySize, uint32 MaxMemorySize, uint32 S
 		Result = (uint8 *)MemoryBase + *MemorySize;
 		*MemorySize += Size;
 	}
+
+	return Result;
 }
 
 inline number *
@@ -50,16 +52,13 @@ OnVisitRegister(visit_result *Result, visit_result VisitResult)
 	return VisitResult.Number;
 }
 
-#if 0
-
 inline visit_result
-OnVisitSuccess(visit_result *Result, node *Node)
+OnVisitSuccess(visit_result *Result, number *Number)
 {
-	Result->Value = Node;
+	Result->Number = Number;
 
 	return *Result;
 }
-#endif
 
 inline visit_result
 OnVisitFailure(visit_result *Result, error Error)
@@ -75,19 +74,7 @@ IsTokenType(token Token, token_type Type) { return Token.Type == Type; }
 inline bool32
 IsNodeType(node *Node, node_type Type) { return Node->Header.Type == Type; }
 
-internal visit_result Visit(node *Node, context* Context);
-
-#if 0
-internal visit_result
-Visit_Number(node *Node, context *Context)
-{
-	visit_result Result = {};
-
-	Result.Value = GetNode(Node, node);
-
-	return OnVisitSuccess(&Result, Node);
-}
-#endif
+inline visit_result Visit(node_memory *NodeMemory, node *Node, context* Context);
 
 internal number *
 PushNumber(node_memory *NodeMemory, real32 Value)
@@ -115,110 +102,166 @@ PushNumber(node_memory *NodeMemory, int32 Value)
 	return Number;
 }
 
-inline number *
+inline op_result
 Add(node_memory *NodeMemory, number *Left, number *Right)
 {
-	number_node *LeftNode = GetNode(Left, number_node);
-	number_node *RightNode = GetNode(Right, number_node);
+	op_result OpResult = {};
 
-	token LeftToken = LeftNode->Token;
-	token RightToken = RightNode->Token;
-
-	if((LeftToken.Type == TT_FLOAT) || (RightToken.Type == TT_FLOAT))
+	if((Left->Type == NUM_FLOAT) && (Right->Type == NUM_FLOAT))
 	{
-		real32 Result = ToReal(LeftToken.Value).Value + ToReal(RightToken.Value).Value;
-		return PushNumber(NodeMemory, Result);
+		real32 Result = *((real32 *)Left->Number) + *((real32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
+	}
+	else if(Left->Type == NUM_FLOAT)
+	{
+		real32 Result = *((real32 *)Left->Number) + *((int32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
+	}
+	else if(Right->Type == NUM_FLOAT)
+	{
+		real32 Result = *((int32 *)Left->Number) + *((real32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
 	}
 	else
 	{
-		int32 Result = ToInt(LeftToken.Value).Value + ToInt(RightToken.Value).Value;
-		return PushNumber(NodeMemory, Result);
+		int32 Result = *((int32 *)Left->Number) + *((int32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
 	}
+
+	return OpResult;
 }
 
-inline number *
+inline op_result
 Subtract(node_memory *NodeMemory, number *Left, number *Right)
 {
-	number_node *LeftNode = GetNode(Left, number_node);
-	number_node *RightNode = GetNode(Right, number_node);
+	op_result OpResult = {};
 
-	token LeftToken = LeftNode->Token;
-	token RightToken = RightNode->Token;
-
-	if((LeftToken.Type == TT_FLOAT) || (RightToken.Type == TT_FLOAT))
+	if((Left->Type == NUM_FLOAT) && (Right->Type == NUM_FLOAT))
 	{
-		real32 Result = ToReal(LeftToken.Value).Value - ToReal(RightToken.Value).Value;
-		return PushNumber(NodeMemory, Result);
+		real32 Result = *((real32 *)Left->Number) - *((real32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
+	}
+	else if(Left->Type == NUM_FLOAT)
+	{
+		real32 Result = *((real32 *)Left->Number) - *((int32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
+	}
+	else if(Right->Type == NUM_FLOAT)
+	{
+		real32 Result = *((int32 *)Left->Number) - *((real32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
 	}
 	else
 	{
-		int32 Result = ToInt(LeftToken.Value).Value - ToInt(RightToken.Value).Value;
-		return PushNumber(NodeMemory, Result);
+		int32 Result = *((int32 *)Left->Number) - *((int32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
 	}
+
+	return OpResult;
 }
 
-inline number *
+inline op_result
 Multiply(node_memory *NodeMemory, number *Left, number *Right)
 {
-	number_node *LeftNode = GetNode(Left, number_node);
-	number_node *RightNode = GetNode(Right, number_node);
+	op_result OpResult = {};
 
-	token LeftToken = LeftNode->Token;
-	token RightToken = RightNode->Token;
-
-	if((LeftToken.Type == TT_FLOAT) || (RightToken.Type == TT_FLOAT))
+	if((Left->Type == NUM_FLOAT) && (Right->Type == NUM_FLOAT))
 	{
-		real32 Result = ToReal(LeftToken.Value).Value / ToReal(RightToken.Value).Value;
-		return PushNumber(NodeMemory, Result);
+		real32 Result = *((real32 *)Left->Number) * *((real32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
+	}
+	else if(Left->Type == NUM_FLOAT)
+	{
+		real32 Result = *((real32 *)Left->Number) * *((int32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
+	}
+	else if(Right->Type == NUM_FLOAT)
+	{
+		real32 Result = *((int32 *)Left->Number) * *((real32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
 	}
 	else
 	{
-		int32 Result = ToInt(LeftToken.Value).Value + ToInt(RightToken.Value).Value;
-		return PushNumber(NodeMemory, Result);
+		int32 Result = *((int32 *)Left->Number) * *((int32 *)Right->Number);
+		OpResult.Number = PushNumber(NodeMemory, Result);
 	}
+
+	return OpResult;
 }
 
-inline number *
+inline op_result
 Division(node_memory *NodeMemory, number *Left, number *Right)
 {
-	number_node *LeftNode = GetNode(Left, number_node);
-	number_node *RightNode = GetNode(Right, number_node);
+	op_result OpResult = {};
 
-	token LeftToken = LeftNode->Token;
-	token RightToken = RightNode->Token;
+	real32 LeftNum = *((real32 *)Left->Number);
+	real32 RightNum = *((real32 *)Right->Number);
 
-	if((LeftToken.Type == TT_FLOAT) || (RightToken.Type == TT_FLOAT))
+	if((Left->Type == NUM_FLOAT) && (Right->Type == NUM_FLOAT)) {}
+	else if(Left->Type == NUM_FLOAT)
 	{
-		real32 Result = ToReal(LeftToken.Value).Value / ToReal(RightToken.Value).Value;
-		return PushNumber(NodeMemory, Result);
+		RightNum = (real32)(*((int32 *)Right->Number));
+	}
+	else if(Right->Type == NUM_FLOAT)
+	{
+		LeftNum = (real32)(*((int32 *)Left->Number));
 	}
 	else
 	{
-		real32 Result = ToInt(LeftToken.Value).Value / ToInt(RightToken.Value).Value;
-		return PushNumber(NodeMemory, Result);
+		LeftNum = (real32)(*((int32 *)Left->Number));
+		RightNum = (real32)(*((int32 *)Right->Number));
 	}
+
+	real32 Result = LeftNum / RightNum;
+	OpResult.Number = PushNumber(NodeMemory, Result);
+	return OpResult;
 }
 
+internal visit_result
+Visit_Number(node_memory *NodeMemory, node *Node, context *Context)
+{
+	visit_result Result = {};
+
+	number_node *NumberNode = GetNode(Node, number_node);
+	token Token = NumberNode->Token;
+	number *Number = 0;
+
+	if(Token.Type == TT_FLOAT)
+	{
+		real32 Num = ToReal(Token.Value).Value;
+		Number = PushNumber(NodeMemory, Num);
+	}
+	else if(Token.Type == TT_INT)
+	{
+		int32 Num = ToInt(Token.Value).Value;
+		Number = PushNumber(NodeMemory, Num);
+	}
+	else InvalidCodePath;
+
+	return OnVisitSuccess(&Result, Number);
+}
 
 internal visit_result
 Visit_UnaryOp(node_memory *NodeMemory, node *Node, context *Context)
 {
 	visit_result Result = {};
+
 	unary_node *Unary = GetNode(Node, unary_node);
-	number *Number = OnVisitRegister(&Result, Visit(Node, Context));
+	number *Number = OnVisitRegister(&Result, Visit(NodeMemory, Unary->Node, Context));
 	if(Result.Error.Type != NoError) return Result;
 
 	op_result OpResult = {};
 	if(Unary->OpToken.Type == TT_MINUS)
 	{
-		number_node One = {};
-		Concat(One.Token.Value, false, "-1");
-		One.Token.Type = TT_INT;
-		OpResult = Multiply(NodeMemory, Number, One);
+		number One = {};
+		One.Type = NUM_INT;
+		int32 Temp = -1;
+		One.Number = &Temp;
+		OpResult = Multiply(NodeMemory, Number, &One);
 	}
 
-	if(!OpResult.Error.Type != NoError) return OnVisitFailure(&Result, OpResult.Error);
-	else return OnVisitSuccess(&Result, OpResult.Node);
+	if(OpResult.Error.Type != NoError) return OnVisitFailure(&Result, OpResult.Error);
+	else return OnVisitSuccess(&Result, OpResult.Number);
 }
 
 internal visit_result
@@ -226,9 +269,9 @@ Visit_BinaryOp(node_memory *NodeMemory, node *Node, context *Context)
 {
 	visit_result Result = {};
 	binary_node *Binary = GetNode(Node, binary_node);
-	node *Left = OnVisitRegister(&Result, Visit(Binary->LeftNode, Context));
+	number *Left = OnVisitRegister(&Result, Visit(NodeMemory, Binary->LeftNode, Context));
 	if(Result.Error.Type != NoError) return Result;
-	node *Right = OnVisitRegister(&Result, Visit(Binary->RightNode, Context));
+	number *Right = OnVisitRegister(&Result, Visit(NodeMemory, Binary->RightNode, Context));
 	if(Result.Error.Type != NoError) return Result;
 
 	op_result OpResult = {};
@@ -237,31 +280,32 @@ Visit_BinaryOp(node_memory *NodeMemory, node *Node, context *Context)
 	{
 		OpResult = Add(NodeMemory, Left, Right);
 	}
-	if(Binary->OpToken.Type == TT_MINUS)
+	else if(Binary->OpToken.Type == TT_MINUS)
 	{
 		OpResult = Subtract(NodeMemory, Left, Right);
 	}
-	if(Binary->OpToken.Type == TT_MUL)
+	else if(Binary->OpToken.Type == TT_MUL)
 	{
 		OpResult = Multiply(NodeMemory, Left, Right);
 	}
-	if(Binary->OpToken.Type == TT_DIV)
+	else if(Binary->OpToken.Type == TT_DIV)
 	{
 		OpResult = Division(NodeMemory, Left, Right);
 	}
+	else InvalidCodePath;
 
-	if(!OpResult.Error.Type != NoError) return OnVisitFailure(&Result, OpResult.Error);
-	else return OnVisitSuccess(&Result, OpResult.Node);
+	if(OpResult.Error.Type != NoError) return OnVisitFailure(&Result, OpResult.Error);
+	else return OnVisitSuccess(&Result, OpResult.Number);
 }
 
-internal visit_result
-InterpreterVisit(transient_memory *TranMemory, node *Node, context* Context)
+inline visit_result
+Visit(node_memory *NodeMemory, node *Node, context* Context)
 {
 	visit_result Result = {};
 
-	if(IsNodeType(Node, NT_number_node)) Result = OnVisitSuccess(&Result, Node);
-	else if(IsNodeType(Node, NT_unary_node)) Result = Visit_UnaryOp(TranMemory, Node, Context);
-	else if(IsNodeType(Node, NT_binary_node)) Result = Visit_BinaryOp(TranMemory, Node, Context);
+	if(IsNodeType(Node, NT_number_node)) Result.Number = OnVisitRegister(&Result, Visit_Number(NodeMemory, Node, Context));
+	else if(IsNodeType(Node, NT_unary_node)) Result.Number = OnVisitRegister(&Result, Visit_UnaryOp(NodeMemory, Node, Context));
+	else if(IsNodeType(Node, NT_binary_node)) Result.Number = OnVisitRegister(&Result, Visit_BinaryOp(NodeMemory, Node, Context));
 
 	else Result.Error = MakeError(VisitError, "Visit function not defined for this type!");
 

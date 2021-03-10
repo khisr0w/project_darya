@@ -12,6 +12,7 @@ struct transient_memory
 {
 	void *MemoryBase;
 	uint32 MemorySize;
+	uint32 Size;
 };
 
 struct win32_console_stdin

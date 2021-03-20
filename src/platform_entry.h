@@ -14,18 +14,19 @@ struct win32_console_stdin
 	DWORD CharRead;
 };
 
-struct node_memory
-{
-	void *MemoryBase;
-	uint32 MaxMemorySize;
-	uint32 Size;
-};
-
 struct memory_arena
 {
-	uint32 MaxSize;
-	uint32 Size;
+	memory_index Size;
 	void *Base;
+	memory_index Used;
+
+	int32 TempCount;
+};
+
+struct temporary_memory
+{
+	memory_arena *Arena;
+	memory_index Used;
 };
 
 struct transient_memory

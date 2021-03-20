@@ -28,9 +28,9 @@ inline void
 InitializeParser(parser_state *ParserState, memory_arena *Tokens)
 {
 	Assert(ParserState && Tokens);
-	ParserState->AST.Size = 0;
+	ParserState->AST.Used = 0;
 	ParserState->Tokens = (token *)Tokens->Base;
-	ParserState->TokenLength = Tokens->Size / sizeof(token);
+	ParserState->TokenLength = Tokens->Used / sizeof(token);
 	ParserState->Token_Id = -1;
 	Advance(ParserState);
 }
@@ -106,16 +106,12 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 
 			if(Token.Type == TT_REAL)
 			{
-				real32 *Num = PushStruct(&ParserState->AST, real32);
-				*Num = ToReal(Token.Value).Value;
-				NumberNode->Number = Num;
+				NumberNode->Real = ToReal(Token.Value).Value;
 				NumberNode->Type = NumberType_Real;
 			}
 			else if(Token.Type == TT_INT)
 			{
-				int32 *Num = PushStruct(&ParserState->AST, int32);
-				*Num = ToReal(Token.Value).Value;
-				NumberNode->Number = Num;
+				NumberNode->Int = ToInt(Token.Value).Value;
 				NumberNode->Type = NumberType_Int;
 			}
 			else InvalidCodePath;

@@ -29,17 +29,17 @@ GetNode_(node *Node)
 	return Result;
 }
 
-inline node *
+inline var *
 OnVisitRegister(visit_result *Result, visit_result VisitResult)
 {
 	if(VisitResult.Error.Type != NoError) Result->Error = VisitResult.Error;
-	return VisitResult.BaseNode;
+	return VisitResult.Var;
 }
 
 inline visit_result
-OnVisitSuccess(visit_result *Result, node *Node)
+OnVisitSuccess(visit_result *Result, var *Var)
 {
-	Result->BaseNode = Node;
+	Result->Var = Var;
 
 	return *Result;
 }
@@ -58,8 +58,9 @@ IsTokenType(token Token, token_type Type) { return Token.Type == Type; }
 inline bool32
 IsNodeType(node *Node, node_type Type) { return Node->Header.Type == Type; }
 
-inline visit_result Visit(node_memory *NodeMemory, node *Node, context* Context);
+inline visit_result Visit(interpreter_state *InterState, node *Node, context* Context);
 
+#if 0
 internal void *
 PushNumber(memory_arena *RuntimeMem, real32 Value)
 {
@@ -84,34 +85,39 @@ PushNumber(memory_arena *RuntimeMem, int32 Value)
 
 	return Number;
 }
+#endif
 
-inline op_result
-Add(memory_arena *RuntimeMem, number *Left, number *Right)
+inline visit_result
+Add(var *Left, var *Right)
 {
-	op_result OpResult = {};
+	visit_result Result = {};
+	Result.Var = Left;
 
-	if((Left->Type == NumberType_Real) && (Right->Type == NumberType_Real))
+	number *LeftNum = (number *)Left->Value;
+	number *RightNum = (number *)Right->Value;
+
+	if((LeftNum->Type == NumberType_Real) && (RightNum->Type == NumberType_Real))
 	{
-		OpResult.Number.Real = Left->Real + Right->Real;
-		OpResult.Number.Type = NumberType_Real;
+		LeftNum->Real = LeftNum->Real + RightNum->Real;
+		LeftNum->Type = NumberType_Real;
 	}
-	else if(Left->Type == NumberType_Real)
+	else if(LeftNum->Type == NumberType_Real)
 	{
-		OpResult.Number.Real = Left->Real + Right->Int;
-		OpResult.Number.Type = NumberType_Real;
+		LeftNum->Real = LeftNum->Real + RightNum->Int;
+		LeftNum->Type = NumberType_Real;
 	}
-	else if(Right->Type == NumberType_Real)
+	else if(RightNum->Type == NumberType_Real)
 	{
-		OpResult.Number.Real = Left->Int + Right->Real;
-		OpResult.Number.Type = NumberType_Real;
+		LeftNum->Real = LeftNum->Int + RightNum->Real;
+		LeftNum->Type = NumberType_Real;
 	}
 	else
 	{
-		OpResult.Number.Int = Left->Int + Right->Int;
-		OpResult.Number.Type = NumberType_Int;
+		LeftNum->Int = LeftNum->Int + RightNum->Int;
+		LeftNum->Type = NumberType_Int;
 	}
 
-	return OpResult;
+	return Result;
 }
 
 #if 0
@@ -143,7 +149,6 @@ Add(memory_arena *RuntimeMem, number *Left, number *Right)
 
 	return OpResult;
 }
-#endif
 
 inline op_result
 Subtract(memory_arena *RuntimeMem, number_node *Left, number_node *Right)
@@ -252,15 +257,34 @@ Power(memory_arena *RuntimeMem, number_node *Left, number_node *Right)
 
 	return OpResult;
 }
+#endif
 
 internal visit_result
 Visit_Number(interpreter_state *InterState, node *Node, context *Context)
 {
 	visit_result Result = {};
 
-	// number_node *NumberNode = GetNode(Node, number_node);
-	return OnVisitSuccess(&Result, Node);
+	number_node *NumberNode = GetNode(Node, number_node);
+
+	number *Number = PushStruct(&InterState->RuntimeMem, number);
+	Number->Int = NumberNode->Int;
+	Number->Real = NumberNode->Real;
+	Number->Type = NumberNode->Type;
+
+	var *Var = PushStruct(&InterState->RuntimeMem, var);
+	Var->Type = VarType_Number;
+	Var->Value = Number;
+
+	return OnVisitSuccess(&Result, Var);
 }
+
+#if 0
+internal var *
+PushVar(memory_arena *Arena, )
+{
+	PushStruct(Arena, var);
+}
+#endif
 
 internal visit_result
 Visit_UnaryOp(interpreter_state *InterState, node *Node, context *Context)
@@ -268,21 +292,21 @@ Visit_UnaryOp(interpreter_state *InterState, node *Node, context *Context)
 	visit_result Result = {};
 
 	unary_node *Unary = GetNode(Node, unary_node);
-	node *Node = OnVisitRegister(&Result, Visit(InterState, Unary->Node, Context));
+	var *Var = OnVisitRegister(&Result, Visit(InterState, Unary->Node, Context));
 	if(Result.Error.Type != NoError) return Result;
 
-	op_result OpResult = {};
+	visit_result OpResult = {};
 	if(Unary->OpToken.Type == TT_MINUS)
 	{
 		number_node One = {};
 		One.Type = NumberType_Int;
 		int32 Temp = -1;
-		One.Number = &Temp;
-		OpResult = Multiply(InterState, Number, &One);
+		//One.Number = &Temp;
+		// OpResult = Multiply(InterState, Number, &One);
 	}
 
 	if(OpResult.Error.Type != NoError) return OnVisitFailure(&Result, OpResult.Error);
-	else return OnVisitSuccess(&Result, OpResult.Number);
+	else return OnVisitSuccess(&Result, OpResult.Var);
 }
 
 internal visit_result
@@ -290,53 +314,67 @@ Visit_BinaryOp(interpreter_state *InterState, node *Node, context *Context)
 {
 	visit_result Result = {};
 	binary_node *Binary = GetNode(Node, binary_node);
-	node *Left = OnVisitRegister(&Result, Visit(InterState, Binary->LeftNode, Context));
-	if(Result.Error.Type != NoError) return Result;
-	node *Right = OnVisitRegister(&Result, Visit(InterState, Binary->RightNode, Context));
+	var *Left = OnVisitRegister(&Result, Visit(InterState, Binary->LeftNode, Context));
 	if(Result.Error.Type != NoError) return Result;
 
-	if((Left.Type == NT_number_node) && (Right.Type == NT_number_node))
+	// NOTE(Khisrow): Temporary Memory to remove the Right var
+	temporary_memory TempMem = BeginTemporaryMemory(&InterState->RuntimeMem);
+	var *Right = OnVisitRegister(&Result, Visit(InterState, Binary->RightNode, Context));
+	if(Result.Error.Type != NoError) return Result;
+
+	if(Left->Type == Right->Type)
 	{
-		number_node NumberLeft = ;
-		number_node NumberRight = ;
-		op_result OpResult = {};
-		switch(Binary->OpToken.Type)
+		if(Left->Type == VarType_Number)
 		{
-			case TT_PLUS:
-			{
-				OpResult = Add(InterState, Left, Right);
-			} break;
+			visit_result OpResult = {};
 
-			case TT_MINUS:
+			switch(Binary->OpToken.Type)
 			{
-				OpResult = Subtract(InterState, Left, Right);
-			} break;
+				case TT_PLUS:
+				{
+					OpResult = Add(Left, Right);
+				} break;
+#if 0
+				case TT_MINUS:
+				{
+					OpResult = Subtract(Left, Right);
+				} break;
 
-			case TT_MUL:
-			{
-				OpResult = Multiply(InterState, Left, Right);
-			} break;
+				case TT_MUL:
+				{
+					OpResult = Multiply(Left, Right);
+				} break;
 
-			case TT_DIV:
-			{
-				OpResult = Division(InterState, Left, Right);
-			} break;
+				case TT_DIV:
+				{
+					OpResult = Division(InterState, Left, Right);
+				} break;
 
-			case TT_POW:
-			{
-				OpResult = Power(InterState, Left, Right);
-			} break;
+				case TT_POW:
+				{
+					OpResult = Power(InterState, Left, Right);
+				} break;
+#endif
+				default: InvalidCodePath;
+			}
 
-			default: InvalidCodePath;
+			EndTemporaryMemory(TempMem);
+			if(OpResult.Error.Type != NoError) return OnVisitFailure(&Result, OpResult.Error);
+
+			else return OnVisitSuccess(&Result, OpResult.Var);
 		}
-
-		if(OpResult.Error.Type != NoError) return OnVisitFailure(&Result, OpResult.Error);
-		else return OnVisitSuccess(&Result, OpResult.Number);
+		else
+		{
+			EndTemporaryMemory(TempMem);
+			InvalidCodePath;
+			return OnVisitFailure(&Result, MakeError(VisitError, "Only numbers operations are supported"));
+		}
 	}
 	else
 	{
+		EndTemporaryMemory(TempMem);
 		InvalidCodePath;
-		return OnVisitFailure(&Result, MakeError(TypeMismatch, "the two sides of operation must be of the same type!"));
+		return OnVisitFailure(&Result, MakeError(VisitError, "the two sides of operation must be of the same type!"));
 	}
 }
 
@@ -345,10 +383,10 @@ Visit(interpreter_state *InterState, node *Node, context* Context)
 {
 	visit_result Result = {};
 
-	if(IsNodeType(Node, NT_number_node)) Result.Number = OnVisitRegister(&Result, Visit_Number(InterState, Node, Context));
-	else if(IsNodeType(Node, NT_unary_node)) Result.Number = OnVisitRegister(&Result, Visit_UnaryOp(InterState, Node, Context));
-	else if(IsNodeType(Node, NT_binary_node)) Result.Number = OnVisitRegister(&Result, Visit_BinaryOp(InterState, Node, Context));
-	else if(IsNodeType(Node, NT_var_assign_node)) Result.Number = OnVisitRegister(&Result, Visit_BinaryOp(InterState, Node, Context));
+	if(IsNodeType(Node, NT_number_node)) Result.Var = OnVisitRegister(&Result, Visit_Number(InterState, Node, Context));
+	else if(IsNodeType(Node, NT_unary_node)) Result.Var = OnVisitRegister(&Result, Visit_UnaryOp(InterState, Node, Context));
+	else if(IsNodeType(Node, NT_binary_node)) Result.Var = OnVisitRegister(&Result, Visit_BinaryOp(InterState, Node, Context));
+	else if(IsNodeType(Node, NT_var_assign_node)) Result.Var = OnVisitRegister(&Result, Visit_BinaryOp(InterState, Node, Context));
 
 	else Result.Error = MakeError(VisitError, "Visit function not defined for this type!");
 

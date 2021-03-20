@@ -13,6 +13,11 @@ struct interpreter_state
 	memory_arena RuntimeMem;
 };
 
+enum var_type
+{
+	VarType_Number,
+};
+
 struct context
 {
 	char *DisplayName;
@@ -20,21 +25,22 @@ struct context
 	position *ParentPos;
 };
 
-struct visit_node
+struct var
+{
+	var_type Type;
+	void *Value;
+};
+
+struct number
 {
 	number_type Type;
-	void *Value;
+	int32 Int;
+	real32 Real;
 };
 
 struct visit_result
 {
-	node *Node;
-	error Error;
-};
-
-struct op_result
-{
-	number Number;
+	var *Var;
 	error Error;
 };
 
@@ -43,13 +49,6 @@ struct symbol_table
 	memory_arena Arena;
 
 	symbol_table *Parent;
-};
-
-struct number
-{
-	number_type Type;
-	int32 Int;
-	real32 Real;
 };
 
 #define INTERPRETER_H

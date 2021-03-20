@@ -24,6 +24,7 @@ typedef unsigned char uint8;
 typedef unsigned int uint32;
 typedef int bool32;
 typedef float real32;
+typedef unsigned long long memory_index;
 
 #define internal static
 
@@ -130,26 +131,26 @@ int main(int argc, char *argv[])
 	if(GLOBALConsoleInputHandle == INVALID_HANDLE_VALUE) return 0;
 
 	text_memory TextMemory = {};
-	TextMemory.Arena.MaxSize = Megabytes(10);
+	TextMemory.Arena.Size = Megabytes(10);
 
 	lexer_state LexerState = {};
-	LexerState.TokenMemory.MaxSize = Megabytes(10);
+	LexerState.TokenMemory.Size = Megabytes(10);
 
 	parser_state ParserState = {};
-	ParserState.AST.MaxSize = Megabytes(10);
+	ParserState.AST.Size = Megabytes(10);
 
 	interpreter_state InterState = {};
-	InterState.RuntimeMem.MaxSize = Megabytes(10);
+	InterState.RuntimeMem.Size = Megabytes(10);
 
-	uint32 TotalMemorySize = TextMemory.Arena.MaxSize +
-							 LexerState.TokenMemory.MaxSize +
-							 ParserState.AST.MaxSize +
-							 InterState.RuntimeMem.MaxSize;
+	uint32 TotalMemorySize = TextMemory.Arena.Size +
+							 LexerState.TokenMemory.Size +
+							 ParserState.AST.Size +
+							 InterState.RuntimeMem.Size;
 
 	TextMemory.Arena.Base = VirtualAlloc(0, TotalMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-	LexerState.TokenMemory.Base = (uint8 *)TextMemory.Arena.Base + TextMemory.Arena.MaxSize;
-	ParserState.AST.Base = (uint8 *)LexerState.TokenMemory.Base + LexerState.TokenMemory.MaxSize;
-	InterState.RuntimeMem.Base = (uint8 *)ParserState.AST.Base + ParserState.AST.MaxSize;
+	LexerState.TokenMemory.Base = (uint8 *)TextMemory.Arena.Base + TextMemory.Arena.Size;
+	ParserState.AST.Base = (uint8 *)LexerState.TokenMemory.Base + LexerState.TokenMemory.Size;
+	InterState.RuntimeMem.Base = (uint8 *)ParserState.AST.Base + ParserState.AST.Size;
 
 	Assert(TextMemory.Arena.Base);
 	Assert(LexerState.TokenMemory.Base);
@@ -163,16 +164,12 @@ int main(int argc, char *argv[])
 		SetConsoleCtrlHandler(NULL, true);
 
 		win32_console_stdin ReadData = {};
-		ReadData.Input = TextMemory;
+		ReadData.Input = (char *)TextMemory.Arena.Base;
 		// Win32StdOut("Project Darya Shell Module\n\n");
 		while(true)
 		{
-			// NOTE(Khisrow): Reset Memory
-			LexerState.Tokens.TokenCount = 0;
-			NodeMemory.Size = 0;
-
 			Win32StdOut("Project Darya Shell >> ");
-			ReadData.CharRead = Win32StdIn(TextMemory, TextSize);
+			ReadData.CharRead = Win32StdIn(ReadData.Input, TextMemory.Arena.Size);
 
 			if(StringCompare(ReadData.Input, "exit"))
 			{
@@ -192,7 +189,7 @@ int main(int argc, char *argv[])
 				{
 					// NOTE(Khisrow): Lexer and Tokenizer
 					char FileName[MAX_PATH] = "<stdin>";
-					InitializeLexer(&LexerState, FileName, TextMemory);
+					InitializeLexer(&LexerState, FileName, (char *)TextMemory.Arena.Base);
 					op_status LexerStatus = PopulateTokens(&LexerState);
 					if(LexerStatus.Success)
 					{
@@ -208,7 +205,7 @@ int main(int argc, char *argv[])
 						Win32StdOut(String);
 #endif
 						//NOTE(Khisrow): Parser and AST
-						InitializeParser(&ParserState, &LexerState.Tokens);
+						InitializeParser(&ParserState, &LexerState.TokenMemory);
 						parser_result AST = ParseTokens(&ParserState);
 						if(AST.Error.Type != NoError)
 						{
@@ -225,11 +222,13 @@ int main(int argc, char *argv[])
 							Win32StdOut(String);
 							continue;
 						}
+#if 0
 						void *Number = VisResult.Number->Number;
 						if(VisResult.Number->Type == NUM_FLOAT) ToString(*((real32 *)Number), String);
 						else if(VisResult.Number->Type == NUM_INT) ToString(*((int32 *)Number), String);
 						Concat(String, false, String, "\n")
 						Win32StdOut(String);
+#endif
 					}
 					else 
 					{

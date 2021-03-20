@@ -61,15 +61,39 @@ PushStruct_(memory_arena *MemoryArena, uint32 Size)
 {
 	void *Result = 0;
 
-	if((MemoryArena->Size + Size) < MemoryArena->MaxSize)
+	if((MemoryArena->Used + Size) < MemoryArena->Size)
 	{
-		Result = (uint8 *)MemoryArena->Base + MemoryArena->Size;
-		MemoryArena->Size += Size;
+		Result = (uint8 *)MemoryArena->Base + MemoryArena->Used;
+		MemoryArena->Used += Size;
 	}
 	else InvalidCodePath;
 
 	return Result;
 }
+
+inline temporary_memory
+BeginTemporaryMemory(memory_arena *Arena)
+{
+	temporary_memory Result;
+
+	Result.Arena = Arena;
+	Result.Used = Arena->Used;
+
+	++Arena->TempCount;
+
+	return Result;
+}
+
+inline void
+EndTemporaryMemory(temporary_memory TempMem)
+{
+	memory_arena *Arena = TempMem.Arena;
+	Assert(Arena->Used >= TempMem.Used);
+	Arena->Used = TempMem.Used;
+	Assert(Arena->TempCount > 0);
+	--Arena->TempCount;
+}
+
 
 inline int32
 StringLength(char *String)

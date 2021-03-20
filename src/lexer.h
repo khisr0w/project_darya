@@ -28,7 +28,6 @@ enum token_type
 	TT_EOF,
 };
 
-#if 0
 char *TokenTypeString[] = 
 {
 	"UNDEFINED",
@@ -46,7 +45,6 @@ char *TokenTypeString[] =
 	"RPAREN",
 	"EOF",
 };
-#endif
 
 char *KEYWORDS[] =
 {

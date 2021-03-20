@@ -50,6 +50,7 @@ IncrementPosition(position Pos, char CurrentChar)
 internal void
 InitializeLexer(lexer_state *LexerState, char *FileName, char *TextMemory)
 {
+	LexerState->TokenMemory.Used = 0;
 	position *Pos = &LexerState->Pos;
 	Pos->Index = -1;
 	Pos->Line = 0;

@@ -60,7 +60,8 @@ struct number_node
 	node_pos Pos;
 
 	number_type Type;
-	void *Number;
+	int32 Int;
+	real32 Real;
 };
 
 struct unary_node

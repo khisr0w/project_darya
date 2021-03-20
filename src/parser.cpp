@@ -14,22 +14,23 @@ inline token
 Advance(parser_state *ParserState)
 {
 	ParserState->Token_Id += 1;
-	token_list *Tokens = ParserState->Tokens;
+	token *Tokens = ParserState->Tokens;
 
-	if(ParserState->Token_Id < Tokens->TokenCount)
+	if(ParserState->Token_Id < ParserState->TokenLength)
 	{
-		ParserState->CurrentToken = Tokens->MemoryBase[ParserState->Token_Id];
+		ParserState->CurrentToken = Tokens[ParserState->Token_Id];
 	}
 
 	return ParserState->CurrentToken;
 }
 
 inline void
-InitializeParser(parser_state *ParserState, token_list *Tokens)
+InitializeParser(parser_state *ParserState, memory_arena *Tokens)
 {
 	Assert(ParserState && Tokens);
-	ParserState->ASTSize = 0;
-	ParserState->Tokens = Tokens;
+	ParserState->AST.Size = 0;
+	ParserState->Tokens = (token *)Tokens->Base;
+	ParserState->TokenLength = Tokens->Size / sizeof(token);
 	ParserState->Token_Id = -1;
 	Advance(ParserState);
 }
@@ -38,23 +39,12 @@ InitializeParser(parser_state *ParserState, token_list *Tokens)
 inline void *
 PushNode_(parser_state *ParserState, uint32 Size, node_type Type)
 {
-	void *Result = 0;
-
 	Size += sizeof(node);
 
-	if((ParserState->ASTSize + Size) < ParserState->MaxASTSize)
-	{
-		node *Node = (node *)(ParserState->ASTMemory + ParserState->ASTSize);
-		Node->Header.Type = Type;
-		Result = (uint8 *)Node;
-		ParserState->ASTSize += Size;
-	}
-	else
-	{
-		InvalidCodePath;
-	}
+	node *Node = (node *)PushStruct_(&ParserState->AST, Size);
+	Node->Header.Type = Type;
 
-	return Result;
+	return Node;
 }
 
 inline token
@@ -114,7 +104,21 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 			Result = PushNode(ParserState, number_node);
 			number_node *NumberNode = (number_node *)(Result + 1);
 
-			NumberNode->Token = Token;
+			if(Token.Type == TT_REAL)
+			{
+				real32 *Num = PushStruct(&ParserState->AST, real32);
+				*Num = ToReal(Token.Value).Value;
+				NumberNode->Number = Num;
+				NumberNode->Type = NumberType_Real;
+			}
+			else if(Token.Type == TT_INT)
+			{
+				int32 *Num = PushStruct(&ParserState->AST, int32);
+				*Num = ToReal(Token.Value).Value;
+				NumberNode->Number = Num;
+				NumberNode->Type = NumberType_Int;
+			}
+			else InvalidCodePath;
 
 			NumberNode->Pos.Start = Token.StartPos;
 			NumberNode->Pos.End = Token.EndPos;
@@ -150,6 +154,20 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 			BinaryNode->Pos.Start = LeftPos->Start;
 			BinaryNode->Pos.End = RightPos->End;
 		} break;
+		case NT_var_assign_node:
+		{
+			Assert(First);
+			Result = PushNode(ParserState, var_assign_node);
+			var_assign_node *VarAssignNode = (var_assign_node *)(Result + 1);
+
+			VarAssignNode->Name = Token;
+			VarAssignNode->Value = First;
+
+			node_pos *Pos = (node_pos *)(First + 1);
+
+			VarAssignNode->Pos.Start = Token.StartPos;
+			VarAssignNode->Pos.End = Pos->End;
+		} break;
 
 		default:
 		{
@@ -160,22 +178,24 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 	return Result;
 }
 
-#define BinaryOperation(ParserState, DelegateFunc, OpTypes) BinaryOperation_(ParserState, DelegateFunc,\
-																			 OpTypes, ArrayCount(OpTypes))
+#define BinaryOperation(ParserState, DelegateFuncA, OpTypes, DelegateFuncB) BinaryOperation_(ParserState, DelegateFuncA,\
+																			OpTypes, ArrayCount(OpTypes), DelegateFuncB)
 internal parser_result
-BinaryOperation_(parser_state *ParserState, bin_op_delegate *DelegateFunc, token_type *OpTypes, int32 OpLength)
+BinaryOperation_(parser_state *ParserState, bin_op_delegate *DelegateFuncA,
+				 token_type *OpTypes, int32 OpLength, bin_op_delegate *DelegateFuncB = 0)
 {
+	if(DelegateFuncB == 0) DelegateFuncB = DelegateFuncA;
+
 	parser_result Result = {};
 	token OpToken = {};
-	node *Left = OnParseRegister(&Result, DelegateFunc(ParserState));
+	node *Left = OnParseRegister(&Result, DelegateFuncA(ParserState));
 	if (Result.Error.Type != NoError) return Result;
-
 
 	while(IsTokenInList(ParserState->CurrentToken, OpTypes, OpLength))
 	{
 		OpToken = ParserState->CurrentToken;
 		OnParseRegister(&Result, Advance(ParserState));
-		node *Right = OnParseRegister(&Result, DelegateFunc(ParserState));
+		node *Right = OnParseRegister(&Result, DelegateFuncB(ParserState));
 		if (Result.Error.Type != NoError) return Result;
 		Left = MakeNode(ParserState, OpToken, Left, Right, binary_node);
 	}
@@ -183,30 +203,15 @@ BinaryOperation_(parser_state *ParserState, bin_op_delegate *DelegateFunc, token
 	return OnParseSuccess(&Result, Left);
 }
 
-#if 0
-GetNode()
-{
-}
-#endif
-
-inline parser_result
-Expression(parser_state *ParserState);
+inline parser_result Expression(parser_state *ParserState);
 
 internal parser_result
-Factor(parser_state *ParserState)
+Atom(parser_state *ParserState)
 {
 	parser_result Result = {};
 	token CurrentToken = ParserState->CurrentToken;
 
-	if((CurrentToken.Type == TT_PLUS) || (CurrentToken.Type == TT_MINUS))
-	{
-		OnParseRegister(&Result, Advance(ParserState));
-		parser_result ParResult = Factor(ParserState);
-		node *Factor = OnParseRegister(&Result, ParResult);
-		if(Result.Error.Type != NoError) return Result;
-		return OnParseSuccess(&Result, MakeNode(ParserState, CurrentToken, Factor, 0, unary_node));
-	}
-	else if((CurrentToken.Type == TT_INT) || (CurrentToken.Type == TT_FLOAT))
+	if((CurrentToken.Type == TT_INT) || (CurrentToken.Type == TT_REAL))
 	{
 		OnParseRegister(&Result, Advance(ParserState));
 		return OnParseSuccess(&Result, MakeNode(ParserState, CurrentToken, 0, 0, number_node));
@@ -225,21 +230,70 @@ Factor(parser_state *ParserState)
 		else return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected ')'"));
 	}
 
-	return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected int or float"));
+	return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected int or float '+', '-' or '('"));
+}
+
+internal parser_result Factor(parser_state *ParserState);
+
+inline parser_result
+Power(parser_state *ParserState)
+{
+	token_type OpTypes[] = {TT_POW};
+	return BinaryOperation(ParserState, Atom, OpTypes, Factor);
+}
+
+internal parser_result
+Factor(parser_state *ParserState)
+{
+	parser_result Result = {};
+	token CurrentToken = ParserState->CurrentToken;
+
+	if((CurrentToken.Type == TT_PLUS) || (CurrentToken.Type == TT_MINUS))
+	{
+		OnParseRegister(&Result, Advance(ParserState));
+		parser_result ParResult = Factor(ParserState);
+		node *Factor = OnParseRegister(&Result, ParResult);
+		if(Result.Error.Type != NoError) return Result;
+		return OnParseSuccess(&Result, MakeNode(ParserState, CurrentToken, Factor, 0, unary_node));
+	}
+
+	return Power(ParserState);
 }
 
 inline parser_result
 Term(parser_state *ParserState)
 {
 	token_type OpTypes[] = {TT_MUL, TT_DIV};
-	return BinaryOperation(ParserState, Factor, OpTypes);
+	return BinaryOperation(ParserState, Factor, OpTypes, 0);
 }
 
 inline parser_result
 Expression(parser_state *ParserState)
 {
+	parser_result Result = {};
+
+	if(ParserState->CurrentToken.Type == TT_KEYWORD)
+	{
+		if(StringCompare(ParserState->CurrentToken.Value, "var"))
+		{
+			Advance(ParserState);
+			if(!(ParserState->CurrentToken.Type == TT_ID))
+				return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected Identifier after 'var'"));
+			token Name = ParserState->CurrentToken;
+			Advance(ParserState);
+
+			if(!(ParserState->CurrentToken.Type == TT_EQ))
+				return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '=' after identifier"));
+			Advance(ParserState);
+			parser_result ParResult = Expression(ParserState);
+			node *Value = OnParseRegister(&Result, ParResult);
+			if(Result.Error.Type != NoError) return Result;
+			return OnParseSuccess(&Result, MakeNode(ParserState, Name, Value, 0, var_assign_node));
+		}
+	}
+
 	token_type OpTypes[] = {TT_PLUS, TT_MINUS};
-	return BinaryOperation(ParserState, Term, OpTypes);
+	return BinaryOperation(ParserState, Term, OpTypes, 0);
 }
 
 inline parser_result

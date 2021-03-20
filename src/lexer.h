@@ -13,29 +13,44 @@ char DIGITS[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
 enum token_type
 {
 	TT_UNDEFINED,
+	TT_KEYWORD,
+	TT_ID,
 	TT_INT,
-	TT_FLOAT,
+	TT_REAL,
 	TT_PLUS,
 	TT_MINUS,
 	TT_MUL,
 	TT_DIV,
+	TT_POW,
+	TT_EQ,
 	TT_LPAREN,
 	TT_RPAREN,
 	TT_EOF,
 };
 
+#if 0
 char *TokenTypeString[] = 
 {
 	"UNDEFINED",
-	"INT",
-	"FLOAT",
+	"KEYWORD",
+	"ID",
+	"INTEGER",
+	"REAL",
 	"PLUS",
 	"MINUS",
-	"MUL",
-	"DIV",
+	"MULTIPLICATION",
+	"DIVISION",
+	"POWER",
+	"EQUAL",
 	"LPAREN",
 	"RPAREN",
 	"EOF",
+};
+#endif
+
+char *KEYWORDS[] =
+{
+	"var",
 };
 
 struct position
@@ -57,13 +72,6 @@ struct token
 	position EndPos;
 };
 
-struct token_list
-{
-	token *MemoryBase;
-	uint32 TokenCount;
-	uint32 MemorySize;
-};
-
 enum error_type
 {
 	NoError,
@@ -80,9 +88,14 @@ struct error
 
 struct lexer_state
 {
-	token_list Tokens;
+	memory_arena TokenMemory;
 	position Pos;
 	char CurrentChar;
+};
+
+struct text_memory
+{
+	memory_arena Arena;
 };
 
 struct runtime_state

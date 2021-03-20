@@ -8,6 +8,11 @@
 
 #if !defined(INTERPRETER_H)
 
+struct interpreter_state
+{
+	memory_arena RuntimeMem;
+};
+
 struct context
 {
 	char *DisplayName;
@@ -15,31 +20,37 @@ struct context
 	position *ParentPos;
 };
 
-enum number_type
-{
-	NUM_DEFINED,
-	NUM_FLOAT,
-	NUM_INT,
-};
-
-struct number
+struct visit_node
 {
 	number_type Type;
-	void *Number;
+	void *Value;
 };
 
 struct visit_result
 {
-	number *Number;
+	node *Node;
 	error Error;
 };
 
 struct op_result
 {
-	number *Number;
+	number Number;
 	error Error;
 };
 
+struct symbol_table
+{
+	memory_arena Arena;
+
+	symbol_table *Parent;
+};
+
+struct number
+{
+	number_type Type;
+	int32 Int;
+	real32 Real;
+};
 
 #define INTERPRETER_H
 #endif

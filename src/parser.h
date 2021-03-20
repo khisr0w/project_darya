@@ -9,11 +9,10 @@
 #if !defined(PARSER_H)
 struct parser_state
 {
-	uint8 *ASTMemory;
-	uint32 MaxASTSize;
-	uint32 ASTSize;
+	memory_arena AST;
 
-	token_list *Tokens;
+	token *Tokens;
+	uint32 TokenLength;
 	int32 Token_Id;
 	token CurrentToken;
 };
@@ -24,6 +23,14 @@ enum node_type
 	NT_number_node,
 	NT_unary_node,
 	NT_binary_node,
+	NT_var_assign_node,
+};
+
+enum number_type
+{
+	NumberType_Undefined,
+	NumberType_Int,
+	NumberType_Real,
 };
 
 struct node_header
@@ -52,7 +59,8 @@ struct number_node
 {
 	node_pos Pos;
 
-	token Token;
+	number_type Type;
+	void *Number;
 };
 
 struct unary_node
@@ -72,6 +80,13 @@ struct binary_node
 	node *RightNode;
 };
 
+struct var_assign_node
+{
+	node_pos Pos;
+
+	token Name;
+	node *Value;
+};
 
 #define PARSER_H
 #endif

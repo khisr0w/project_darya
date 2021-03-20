@@ -50,7 +50,6 @@ IncrementPosition(position Pos, char CurrentChar)
 internal void
 InitializeLexer(lexer_state *LexerState, char *FileName, char *TextMemory)
 {
-	LexerState->Tokens.TokenCount = 0;
 	position *Pos = &LexerState->Pos;
 	Pos->Index = -1;
 	Pos->Line = 0;
@@ -61,11 +60,11 @@ InitializeLexer(lexer_state *LexerState, char *FileName, char *TextMemory)
 }
 
 inline void
-AppendToTokenList(token_list *Tokens, char *Value, token_type Type, position *StartPos, position *EndPos = 0)
+AppendToTokenList(lexer_state *LexerState, char *Value, token_type Type, position *StartPos, position *EndPos = 0)
 {
 	Assert(StringLength(Value));
 
-	token *Token = Tokens->MemoryBase + Tokens->TokenCount++;
+	token *Token = PushStruct(&LexerState->TokenMemory, token);
 	CopyToString(Value, Token->Value, ArrayCount(Token->Value));
 	Token->Type = Type;
 
@@ -127,16 +126,14 @@ AppendNumberToList_(lexer_state *LexerState, char *Dest, int32 DestLength)
 {
 	Assert(DestLength);
 
-	token_list *Tokens = &LexerState->Tokens;
-	token *Token = Tokens->MemoryBase + Tokens->TokenCount++;
+	token *Token = PushStruct(&LexerState->TokenMemory, token);
 	Token->StartPos = LexerState->Pos;
 
 	bool32 DotEncountered = false;
 
 	char CurrentChar = LexerState->CurrentChar;
 	int32 Index = 0;
-	while((CurrentChar != '\0') && ((CurrentChar == '.') ||
-		   CharToListCompare(CurrentChar, DIGITS, ArrayCount(DIGITS))))
+	while((CurrentChar != '\0') && ((CurrentChar == '.') || ((CurrentChar >= '0') && (CurrentChar <= '9'))))
 	{
 		if(CurrentChar == '.')
 		{
@@ -156,8 +153,38 @@ AppendNumberToList_(lexer_state *LexerState, char *Dest, int32 DestLength)
 	Token->EndPos = LexerState->Pos;
 
 	CopyToString(Dest, Token->Value, ArrayCount(Token->Value));
-	if(DotEncountered) Token->Type = TT_FLOAT;
+	if(DotEncountered) Token->Type = TT_REAL;
 	else Token->Type = TT_INT;
+
+	return Token;
+}
+
+#define AppendKeywordToList(LexerState, Dest) AppendKeywordToList_(LexerState, Dest, ArrayCount(Dest))
+internal token *
+AppendKeywordToList_(lexer_state *LexerState, char *Temp, int32 TempLength)
+{
+	Assert(TempLength);
+
+	token *Token = PushStruct(&LexerState->TokenMemory, token);
+	Token->StartPos = LexerState->Pos;
+
+	char CurrentChar = LexerState->CurrentChar;
+	int32 Index = 0;
+	while((CurrentChar >= 'a' && CurrentChar <= 'z') ||
+		  (CurrentChar >= 'A' && CurrentChar <= 'Z'))
+	{
+		Temp[Index++] = CurrentChar;
+
+		Advance(LexerState);
+		CurrentChar = LexerState->CurrentChar;
+	}
+
+	Temp[Index] = '\0';
+	Token->EndPos = LexerState->Pos;
+
+	CopyToString(Temp, Token->Value, ArrayCount(Token->Value));
+	if(StringToArrayCompare(Token->Value, KEYWORDS)) Token->Type = TT_KEYWORD;
+	else Token->Type = TT_ID;
 
 	return Token;
 }
@@ -166,10 +193,9 @@ internal op_status
 PopulateTokens(lexer_state *LexerState)
 {
 	op_status Status = {};
-	token_list *Tokens = &LexerState->Tokens;
 	char CurrentChar[2];
-	CurrentChar[1] = '\0';
 	CurrentChar[0] = LexerState->CurrentChar;
+	CurrentChar[1] = '\0';
 	char Temp[100];
 	Temp[99] = '\0';
 
@@ -179,38 +205,53 @@ PopulateTokens(lexer_state *LexerState)
 		{
 			Advance(LexerState);
 		}
-		else if(CharToListCompare(*CurrentChar, DIGITS, ArrayCount(DIGITS)))
+		else if((*CurrentChar >= '0') && (*CurrentChar <= '9'))
 		{
 			AppendNumberToList(LexerState, Temp);
 		}
+		else if((*CurrentChar >= 'a' && *CurrentChar <= 'z') ||
+				(*CurrentChar >= 'A' && *CurrentChar <= 'Z'))
+		{
+			AppendKeywordToList(LexerState, Temp);
+		}
 		else if(*CurrentChar == '+')
 		{
-			AppendToTokenList(Tokens, CurrentChar, TT_PLUS, &LexerState->Pos);
+			AppendToTokenList(LexerState, CurrentChar, TT_PLUS, &LexerState->Pos);
 			Advance(LexerState);
 		}
 		else if(*CurrentChar == '-')
 		{
-			AppendToTokenList(Tokens, CurrentChar, TT_MINUS, &LexerState->Pos);
+			AppendToTokenList(LexerState, CurrentChar, TT_MINUS, &LexerState->Pos);
 			Advance(LexerState);
 		}
 		else if(*CurrentChar == '*')
 		{
-			AppendToTokenList(Tokens, CurrentChar, TT_MUL, &LexerState->Pos);
+			AppendToTokenList(LexerState, CurrentChar, TT_MUL, &LexerState->Pos);
+			Advance(LexerState);
+		}
+		else if(*CurrentChar == '^')
+		{
+			AppendToTokenList(LexerState, CurrentChar, TT_POW, &LexerState->Pos);
 			Advance(LexerState);
 		}
 		else if(*CurrentChar == '/')
 		{
-			AppendToTokenList(Tokens, CurrentChar, TT_DIV, &LexerState->Pos);
+			AppendToTokenList(LexerState, CurrentChar, TT_DIV, &LexerState->Pos);
+			Advance(LexerState);
+		}
+		else if(*CurrentChar == '=')
+		{
+			AppendToTokenList(LexerState, CurrentChar, TT_EQ, &LexerState->Pos);
 			Advance(LexerState);
 		}
 		else if(*CurrentChar == '(')
 		{
-			AppendToTokenList(Tokens, CurrentChar, TT_LPAREN, &LexerState->Pos);
+			AppendToTokenList(LexerState, CurrentChar, TT_LPAREN, &LexerState->Pos);
 			Advance(LexerState);
 		}
 		else if(*CurrentChar == ')')
 		{
-			AppendToTokenList(Tokens, CurrentChar, TT_RPAREN, &LexerState->Pos);
+			AppendToTokenList(LexerState, CurrentChar, TT_RPAREN, &LexerState->Pos);
 			Advance(LexerState);
 		}
 		else
@@ -224,7 +265,7 @@ PopulateTokens(lexer_state *LexerState)
 		CurrentChar[0] = LexerState->CurrentChar;
 	}
 
-	AppendToTokenList(Tokens, TokenTypeString[TT_EOF], TT_EOF, &LexerState->Pos);
+	AppendToTokenList(LexerState, TokenTypeString[TT_EOF], TT_EOF, &LexerState->Pos);
 
 	Status.Success = true;
 	return Status;

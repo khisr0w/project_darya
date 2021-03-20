@@ -8,13 +8,6 @@
 
 #if !defined(WIN32ENTRY_H)
 
-struct transient_memory
-{
-	void *MemoryBase;
-	uint32 MemorySize;
-	uint32 Size;
-};
-
 struct win32_console_stdin
 {
 	char *Input;
@@ -28,6 +21,17 @@ struct node_memory
 	uint32 Size;
 };
 
+struct memory_arena
+{
+	uint32 MaxSize;
+	uint32 Size;
+	void *Base;
+};
+
+struct transient_memory
+{
+	memory_arena Arena;
+};
 
 #define WIN32ENTRY_H
 #endif

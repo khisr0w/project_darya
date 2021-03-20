@@ -9,10 +9,15 @@
 
 /* NOTE(Khisrow): BUGS!!!
 
-   1. 13 * (13) SOLVED!
-   2. 5 - (2 * (24 / 6 + 4) - 4 + 5 * 3) * 4 The third time it gives = -inf SOLVED!
+   TODO(Khisrow):
+       1. More Precise floating point conversion from string to float and vice versa
+	   2. Robust power operation; handle wrapping around 32 bit and scientific notation of big numbers
+	   3. MUST decide whether a fixed starting memory is a good idea for this or not?
+
+   WARNING(Khisrow):
+       1. Power operation is unstable and possibly unusable at this point and must fixed!
+
 */
-#include "windows.h"
 
 typedef int int32;
 typedef unsigned char uint8;
@@ -24,12 +29,12 @@ typedef float real32;
 
 #define MAX_STRING 1024
 
-#include "win32entry.h"
+#include "windows.h"
+#include "platform_entry.h"
 #include "commons.h"
 #include "lexer.cpp"
 #include "parser.cpp"
 #include "interpreter.cpp"
-
 
 // NOTE(Khisrow): Globals
 HANDLE GLOBALConsoleOutputHandle = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -124,34 +129,32 @@ int main(int argc, char *argv[])
 	if(GLOBALConsoleOutputHandle == INVALID_HANDLE_VALUE) return 0;
 	if(GLOBALConsoleInputHandle == INVALID_HANDLE_VALUE) return 0;
 
-	transient_memory TransMemory = {};
-	TransMemory.MemorySize = Megabytes(10);
+	text_memory TextMemory = {};
+	TextMemory.Arena.MaxSize = Megabytes(10);
 
 	lexer_state LexerState = {};
-	LexerState.Tokens.MemorySize = Megabytes(10);
-
-	uint32 TextSize = Megabytes(10);
-
-	node_memory NodeMemory = {};
-	NodeMemory.MaxMemorySize = Megabytes(10);
-	NodeMemory.Size = 0;
-
-	uint32 TotalMemorySize = TransMemory.MemorySize + LexerState.Tokens.MemorySize +
-							  TextSize + NodeMemory.MaxMemorySize;
-
-	void *TransientMemory = VirtualAlloc(0, TotalMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
-	LexerState.Tokens.MemoryBase = (token *)((uint8 *)TransientMemory + TransMemory.MemorySize);
-	char *TextMemory = (char *)((uint8 *)LexerState.Tokens.MemoryBase + LexerState.Tokens.MemorySize);
-	NodeMemory.MemoryBase = (uint8 *)TextMemory + TextSize;
+	LexerState.TokenMemory.MaxSize = Megabytes(10);
 
 	parser_state ParserState = {};
-	ParserState.ASTMemory = (uint8 *)NodeMemory.MemoryBase;
-	ParserState.MaxASTSize = NodeMemory.MaxMemorySize;
+	ParserState.AST.MaxSize = Megabytes(10);
 
-	Assert(TransientMemory);
-	Assert(LexerState.Tokens.MemoryBase);
-	Assert(TextMemory);
-	Assert(ParserState.ASTMemory);
+	interpreter_state InterState = {};
+	InterState.RuntimeMem.MaxSize = Megabytes(10);
+
+	uint32 TotalMemorySize = TextMemory.Arena.MaxSize +
+							 LexerState.TokenMemory.MaxSize +
+							 ParserState.AST.MaxSize +
+							 InterState.RuntimeMem.MaxSize;
+
+	TextMemory.Arena.Base = VirtualAlloc(0, TotalMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+	LexerState.TokenMemory.Base = (uint8 *)TextMemory.Arena.Base + TextMemory.Arena.MaxSize;
+	ParserState.AST.Base = (uint8 *)LexerState.TokenMemory.Base + LexerState.TokenMemory.MaxSize;
+	InterState.RuntimeMem.Base = (uint8 *)ParserState.AST.Base + ParserState.AST.MaxSize;
+
+	Assert(TextMemory.Arena.Base);
+	Assert(LexerState.TokenMemory.Base);
+	Assert(ParserState.AST.Base);
+	Assert(InterState.RuntimeMem.Base);
 
 	//if(StringCompare(argv[1], "shell"))
 	{
@@ -166,7 +169,6 @@ int main(int argc, char *argv[])
 		{
 			// NOTE(Khisrow): Reset Memory
 			LexerState.Tokens.TokenCount = 0;
-			TransMemory.Size = 0;
 			NodeMemory.Size = 0;
 
 			Win32StdOut("Project Darya Shell >> ");
@@ -212,16 +214,16 @@ int main(int argc, char *argv[])
 						{
 							Concat(String, false, AST.Error.Message, "\n");
 							Win32StdOut(String);
-							return 0;
+							continue;
 						}
 
 						context Stack = MakeContext("<root>");
-						visit_result VisResult = Visit(&NodeMemory, AST.Node, &Stack);
+						visit_result VisResult = Visit(&InterState, AST.Node, &Stack);
 						if(VisResult.Error.Type != NoError)
 						{
-							Concat(String, false, AST.Error.Message, "\n");
+							Concat(String, false, VisResult.Error.Message, "\n");
 							Win32StdOut(String);
-							return 0;
+							continue;
 						}
 						void *Number = VisResult.Number->Number;
 						if(VisResult.Number->Type == NUM_FLOAT) ToString(*((real32 *)Number), String);
@@ -233,7 +235,7 @@ int main(int argc, char *argv[])
 					{
 						Concat(String, false, LexerStatus.Error.Message, "\n");
 						Win32StdOut(String);
-						return 0;
+						continue;
 					}
 				}
 			}

@@ -55,6 +55,22 @@
 									   		     }\
 											}
 
+#define PushStruct(Arena, Struct) (Struct *)PushStruct_(Arena, sizeof(Struct))
+inline void *
+PushStruct_(memory_arena *MemoryArena, uint32 Size)
+{
+	void *Result = 0;
+
+	if((MemoryArena->Size + Size) < MemoryArena->MaxSize)
+	{
+		Result = (uint8 *)MemoryArena->Base + MemoryArena->Size;
+		MemoryArena->Size += Size;
+	}
+	else InvalidCodePath;
+
+	return Result;
+}
+
 inline int32
 StringLength(char *String)
 {
@@ -111,19 +127,13 @@ StringCompare(char * A, char *B)
 	{
 		int32 ALen = StringLength(A);
 		int32 BLen = StringLength(B);
-		if((ALen + BLen > 0) && (ALen != BLen))
-		{
-			return false;
-		}
+		if((ALen + BLen > 0) && (ALen != BLen)) { return false; }
 
 		for(int32 Index = 0;
 			Index < ALen;
 			++Index)
 		{
-			if(*A++ != *B++)
-			{
-				return false;
-			}
+			if(*A++ != *B++) { return false; }
 		}
 
 		return true;
@@ -132,6 +142,23 @@ StringCompare(char * A, char *B)
 	return false;
 }
 
+#define StringToArrayCompare(A, B) StringToArrayCompare_(A, B, ArrayCount(B))
+internal bool32
+StringToArrayCompare_(char * A, char **SArray, int32 SArrayLength)
+{
+	Assert(A);
+	for(char **Temp = SArray;
+		SArrayLength-- > 0;
+		++Temp)
+	{
+		char *B = *Temp;
+		if(StringCompare(A, B)) return true;
+	}
+
+	return false;
+}
+
+#if 0
 inline bool32
 CharToListCompare(char Char, char *List, int32 ListLength, int32 *FoundIndex = 0)
 {
@@ -148,6 +175,7 @@ CharToListCompare(char Char, char *List, int32 ListLength, int32 *FoundIndex = 0
 
 	return false;
 }
+#endif
 
 inline char *
 StringConcat(char A, char *B, char *Dest)
@@ -180,6 +208,22 @@ StringConcat(char *A, char *B, char *Dest)
 	return Dest;
 }
 #endif
+
+inline real32
+Power(real32 Base, int32 Power)
+{
+	real32 Result = Base;
+
+	if (Power == 0) return 1;
+	if(Base == 0) return 0;
+
+	while(--Power > 0)
+	{
+		Result *= Base;
+	}
+
+	return Result;
+}
 
 inline int32
 Power(int32 Base, int32 Power)

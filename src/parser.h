@@ -19,11 +19,12 @@ struct parser_state
 
 enum node_type
 {
-	NT_undefined,
-	NT_number_node,
-	NT_unary_node,
-	NT_binary_node,
-	NT_var_assign_node,
+	NodeType_undefined,
+	NodeType_number_node,
+	NodeType_unary_node,
+	NodeType_binary_node,
+	NodeType_var_assign_node,
+	NodeType_var_access_node,
 };
 
 enum number_type
@@ -87,6 +88,14 @@ struct var_assign_node
 
 	token Name;
 	node *Value;
+	bool32 New;
+};
+
+struct var_access_node
+{
+	node_pos Pos;
+
+	token Name;
 };
 
 #define PARSER_H

@@ -13,7 +13,7 @@ typedef parser_result bin_op_delegate(parser_state *ParserState);
 inline token
 Advance(parser_state *ParserState)
 {
-	ParserState->Token_Id += 1;
+	ParserState->Token_Id++;
 	token *Tokens = ParserState->Tokens;
 
 	if(ParserState->Token_Id < ParserState->TokenLength)
@@ -24,24 +24,36 @@ Advance(parser_state *ParserState)
 	return ParserState->CurrentToken;
 }
 
+inline token *
+LookAheadToken(parser_state *ParserState)
+{
+	token *Tokens = ParserState->Tokens;
+
+	if((ParserState->Token_Id + 1) < ParserState->TokenLength)
+	{
+		return Tokens + (ParserState->Token_Id + 1);
+	}
+
+	return 0;
+}
+
 inline void
 InitializeParser(parser_state *ParserState, memory_arena *Tokens)
 {
 	Assert(ParserState && Tokens);
-	ParserState->AST.Used = 0;
 	ParserState->Tokens = (token *)Tokens->Base;
 	ParserState->TokenLength = Tokens->Used / sizeof(token);
 	ParserState->Token_Id = -1;
 	Advance(ParserState);
 }
 
-#define PushNode(ParserState, Type) (node *)PushNode_ (ParserState, sizeof(Type), NT_##Type)
+#define PushNode(ParserState, Type) (node *)PushNode_ (ParserState, sizeof(Type), NodeType_##Type)
 inline void *
 PushNode_(parser_state *ParserState, uint32 Size, node_type Type)
 {
 	Size += sizeof(node);
 
-	node *Node = (node *)PushStruct_(&ParserState->AST, Size);
+	node *Node = (node *)PushSize_(&ParserState->AST, Size);
 	Node->Header.Type = Type;
 
 	return Node;
@@ -91,7 +103,7 @@ IsTokenInList(token CurrentToken, token_type *TokenList, int32 TokenLength)
 	return false;
 }
 
-#define MakeNode(ParserState, Token, First, Second, Type) MakeNode_(ParserState, Token, First, Second, NT_##Type)
+#define MakeNode(ParserState, Token, First, Second, Type) MakeNode_(ParserState, Token, First, Second, NodeType_##Type)
 inline node *
 MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, node_type Type)
 {
@@ -99,7 +111,7 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 
 	switch(Type)
 	{
-		case NT_number_node:
+		case NodeType_number_node:
 		{
 			Result = PushNode(ParserState, number_node);
 			number_node *NumberNode = (number_node *)(Result + 1);
@@ -120,7 +132,7 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 			NumberNode->Pos.End = Token.EndPos;
 		} break;
 
-		case NT_unary_node:
+		case NodeType_unary_node:
 		{
 			Assert(First);
 			Result = PushNode(ParserState, unary_node);
@@ -134,7 +146,7 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 			UnaryNode->Pos.End = Pos->End;
 		} break;
 
-		case NT_binary_node:
+		case NodeType_binary_node:
 		{
 			Assert(First && Second);
 			Result = PushNode(ParserState, binary_node);
@@ -150,7 +162,8 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 			BinaryNode->Pos.Start = LeftPos->Start;
 			BinaryNode->Pos.End = RightPos->End;
 		} break;
-		case NT_var_assign_node:
+
+		case NodeType_var_assign_node:
 		{
 			Assert(First);
 			Result = PushNode(ParserState, var_assign_node);
@@ -158,11 +171,24 @@ MakeNode_(parser_state *ParserState, token Token, node *First, node *Second, nod
 
 			VarAssignNode->Name = Token;
 			VarAssignNode->Value = First;
+			if(Second) VarAssignNode->New = true;
+			else VarAssignNode->New = false;
 
 			node_pos *Pos = (node_pos *)(First + 1);
 
 			VarAssignNode->Pos.Start = Token.StartPos;
 			VarAssignNode->Pos.End = Pos->End;
+		} break;
+
+		case NodeType_var_access_node:
+		{
+			Result = PushNode(ParserState, var_access_node);
+			var_access_node *VarAccessNode = (var_access_node *)(Result + 1);
+
+			VarAccessNode->Name = Token;
+
+			VarAccessNode->Pos.Start = Token.StartPos;
+			VarAccessNode->Pos.End = Token.EndPos;
 		} break;
 
 		default:
@@ -211,6 +237,11 @@ Atom(parser_state *ParserState)
 	{
 		OnParseRegister(&Result, Advance(ParserState));
 		return OnParseSuccess(&Result, MakeNode(ParserState, CurrentToken, 0, 0, number_node));
+	}
+	else if(CurrentToken.Type == TT_ID)
+	{
+		OnParseRegister(&Result, Advance(ParserState));
+		return OnParseSuccess(&Result, MakeNode(ParserState, CurrentToken, 0, 0, var_access_node));
 	}
 	else if((CurrentToken.Type == TT_LPAREN))
 	{
@@ -280,6 +311,21 @@ Expression(parser_state *ParserState)
 
 			if(!(ParserState->CurrentToken.Type == TT_EQ))
 				return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '=' after identifier"));
+			Advance(ParserState);
+			parser_result ParResult = Expression(ParserState);
+			node *Value = OnParseRegister(&Result, ParResult);
+			if(Result.Error.Type != NoError) return Result;
+			return OnParseSuccess(&Result, MakeNode(ParserState, Name, Value, (node *)1, var_assign_node));
+		}
+		else InvalidCodePath;
+	}
+	else if(ParserState->CurrentToken.Type == TT_ID)
+	{
+		token *NextToken = LookAheadToken(ParserState);
+		if(NextToken && NextToken->Type == TT_EQ)
+		{
+			token Name = ParserState->CurrentToken;
+			Advance(ParserState);
 			Advance(ParserState);
 			parser_result ParResult = Expression(ParserState);
 			node *Value = OnParseRegister(&Result, ParResult);

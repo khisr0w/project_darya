@@ -160,9 +160,9 @@ AppendNumberToList_(lexer_state *LexerState, char *Dest, int32 DestLength)
 	return Token;
 }
 
-#define AppendKeywordToList(LexerState, Dest) AppendKeywordToList_(LexerState, Dest, ArrayCount(Dest))
+#define AppendWordToList(LexerState, Dest) AppendWordToList_(LexerState, Dest, ArrayCount(Dest))
 internal token *
-AppendKeywordToList_(lexer_state *LexerState, char *Temp, int32 TempLength)
+AppendWordToList_(lexer_state *LexerState, char *Temp, int32 TempLength)
 {
 	Assert(TempLength);
 
@@ -213,7 +213,7 @@ PopulateTokens(lexer_state *LexerState)
 		else if((*CurrentChar >= 'a' && *CurrentChar <= 'z') ||
 				(*CurrentChar >= 'A' && *CurrentChar <= 'Z'))
 		{
-			AppendKeywordToList(LexerState, Temp);
+			AppendWordToList(LexerState, Temp);
 		}
 		else if(*CurrentChar == '+')
 		{

@@ -55,12 +55,15 @@
 									   		     }\
 											}
 
-#define PushStruct(Arena, Struct) (Struct *)PushStruct_(Arena, sizeof(Struct))
+#define PushStruct(Arena, Struct) (Struct *)PushSize_(Arena, sizeof(Struct))
+#define PushSize(Arena, Struct, Size) (Struct *)PushSize_(Arena, sizeof(Struct)*(Size))
 inline void *
-PushStruct_(memory_arena *MemoryArena, uint32 Size)
+PushSize_(memory_arena *MemoryArena, memory_index Size)
 {
 	void *Result = 0;
 
+	Assert(Size > 0);
+	Assert((MemoryArena->Used + Size) < MemoryArena->Size);
 	if((MemoryArena->Used + Size) < MemoryArena->Size)
 	{
 		Result = (uint8 *)MemoryArena->Base + MemoryArena->Used;
@@ -93,7 +96,6 @@ EndTemporaryMemory(temporary_memory TempMem)
 	Assert(Arena->TempCount > 0);
 	--Arena->TempCount;
 }
-
 
 inline int32
 StringLength(char *String)

@@ -13,9 +13,11 @@
        1. More Precise floating point conversion from string to float and vice versa
 	   2. Robust power operation; handle wrapping around 32 bit and scientific notation of big numbers
 	   3. MUST decide whether a fixed starting memory is a good idea for this or not?
+	   4. Change to dynamic memory allocation! Even for stack, since we will allow things like variable strings
 
    WARNING(Khisrow):
        1. Power operation is unstable and possibly unusable at this point and must fixed!
+       2. Float-String conversion is extremely unstable and must be amended with a better algorithm
 
 */
 
@@ -131,7 +133,7 @@ int main(int argc, char *argv[])
 	if(GLOBALConsoleInputHandle == INVALID_HANDLE_VALUE) return 0;
 
 	text_memory TextMemory = {};
-	TextMemory.Arena.Size = Megabytes(10);
+	TextMemory.Arena.Size = Megabytes(1);
 
 	lexer_state LexerState = {};
 	LexerState.TokenMemory.Size = Megabytes(10);
@@ -140,17 +142,28 @@ int main(int argc, char *argv[])
 	ParserState.AST.Size = Megabytes(10);
 
 	interpreter_state InterState = {};
-	InterState.RuntimeMem.Size = Megabytes(10);
+	InterState.RuntimeMem.Size = Megabytes(4);
+	InterState.Stack.Size = Megabytes(10);
+
+	// NOTE(Khisrow): Stack memory
+	// WARNING(Khisrow): Make sure the size doesn't exceed SymbolSize
+	symbol_table SymbolTable = {};
+	SymbolTable.SymbolSize = 1000;
+	SymbolTable.Arena.Size = SymbolTable.SymbolSize * sizeof(symbol);
 
 	uint32 TotalMemorySize = TextMemory.Arena.Size +
 							 LexerState.TokenMemory.Size +
 							 ParserState.AST.Size +
-							 InterState.RuntimeMem.Size;
+							 InterState.RuntimeMem.Size +
+							 InterState.Stack.Size +
+							 SymbolTable.Arena.Size;
 
 	TextMemory.Arena.Base = VirtualAlloc(0, TotalMemorySize, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 	LexerState.TokenMemory.Base = (uint8 *)TextMemory.Arena.Base + TextMemory.Arena.Size;
 	ParserState.AST.Base = (uint8 *)LexerState.TokenMemory.Base + LexerState.TokenMemory.Size;
 	InterState.RuntimeMem.Base = (uint8 *)ParserState.AST.Base + ParserState.AST.Size;
+	SymbolTable.Arena.Base = (uint8 *)InterState.RuntimeMem.Base + InterState.RuntimeMem.Size;
+	InterState.Stack.Base = (uint8 *)SymbolTable.Arena.Base + SymbolTable.Arena.Size;
 
 	Assert(TextMemory.Arena.Base);
 	Assert(LexerState.TokenMemory.Base);
@@ -214,7 +227,8 @@ int main(int argc, char *argv[])
 							continue;
 						}
 
-						context Stack = MakeContext("<root>");
+						context Stack = {"<root>", 0, 0, &SymbolTable};
+						InitializeInterpreter(&InterState);
 						visit_result VisResult = Visit(&InterState, AST.Node, &Stack);
 						if(VisResult.Error.Type != NoError)
 						{
@@ -222,13 +236,12 @@ int main(int argc, char *argv[])
 							Win32StdOut(String);
 							continue;
 						}
-#if 0
-						void *Number = VisResult.Number->Number;
-						if(VisResult.Number->Type == NUM_FLOAT) ToString(*((real32 *)Number), String);
-						else if(VisResult.Number->Type == NUM_INT) ToString(*((int32 *)Number), String);
+
+						number *Number = (number *)(VisResult.Var + 1);
+						if(Number->Type == NumberType_Int) ToString(Number->Int, String);
+						else if(Number->Type == NumberType_Real) ToString(Number->Real, String);
 						Concat(String, false, String, "\n")
 						Win32StdOut(String);
-#endif
 					}
 					else 
 					{

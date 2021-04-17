@@ -8,11 +8,11 @@
 
 #include "lexer.h"
 
-inline position * 
+inline position *
 Advance(lexer_state *LexerState)
 {
 	position *Pos = &LexerState->Pos;
-	Assert(Pos->Index < StringLength(Pos->TextMemory));
+	Assert(Pos->Index < StringLength(LexerState->TextMemory));
 
 	Pos->Index++;
 	Pos->Col++;
@@ -23,9 +23,9 @@ Advance(lexer_state *LexerState)
 		Pos->Col = 0;
 	}
 
-	if(Pos->Index < StringLength(Pos->TextMemory))
+	if(Pos->Index < StringLength(LexerState->TextMemory))
 	{
-		LexerState->CurrentChar = Pos->TextMemory[Pos->Index];
+		LexerState->CurrentChar = LexerState->TextMemory[Pos->Index];
 	}
 	else LexerState->CurrentChar = '\0';
 
@@ -50,31 +50,30 @@ IncrementPosition(position Pos, char CurrentChar)
 internal void
 InitializeLexer(lexer_state *LexerState, char *FileName, char *TextMemory)
 {
-	LexerState->TokenMemory.Used = 0;
+	FreeDynamicArena(&LexerState->TokenMemory);
 	position *Pos = &LexerState->Pos;
+	LexerState->TextMemory = TextMemory;
 	Pos->Index = -1;
 	Pos->Line = 0;
 	Pos->Col = -1;
 	Pos->FileName = FileName;
-	Pos->TextMemory = TextMemory;
 	Advance(LexerState);
 }
 
 inline void
-AppendToTokenList(lexer_state *LexerState, char *Value, token_type Type, position *StartPos, position *EndPos = 0)
+AppendCharToken(lexer_state *LexerState, char *Value, token_type Type)
 {
 	Assert(StringLength(Value));
 
-	token *Token = PushStruct(&LexerState->TokenMemory, token);
+	token *Token = (token *)PushDynamicSize_(&LexerState->TokenMemory, sizeof(token) + StringLength(Value) + 1);
+	Token->Value = (char *)(Token + 1);
 	CopyToString(Value, Token->Value, ArrayCount(Token->Value));
 	Token->Type = Type;
 
-	if(StartPos) 
-	{
-		Token->StartPos = *StartPos;
-		Token->EndPos = IncrementPosition(*StartPos, Value[0]);
-	}
-	if(EndPos) Token->EndPos = *EndPos;
+	Token->StartPos = LexerState->Pos;
+	int32 EndPos = StringLength(Value);
+	Token->EndPos.Index += EndPos;
+	Token->EndPos.Col += EndPos;
 }
 
 #if 0
@@ -121,71 +120,89 @@ MakeError_(char * MessageHeader, char *Message, error_type ErrorType)
 	return Error;
 }
 
-#define AppendNumberToList(LexerState, Dest) AppendNumberToList_(LexerState, Dest, ArrayCount(Dest))
 internal token *
-AppendNumberToList_(lexer_state *LexerState, char *Dest, int32 DestLength)
+AppendNumberToken(lexer_state *LexerState)
 {
-	Assert(DestLength);
-
-	token *Token = PushStruct(&LexerState->TokenMemory, token);
-	Token->StartPos = LexerState->Pos;
-
+	position StartPos = LexerState->Pos;
 	bool32 DotEncountered = false;
-
 	char CurrentChar = LexerState->CurrentChar;
-	int32 Index = 0;
+	int32 StartIndex = LexerState->Pos.Index;
+	int32 Length = 0;
 	while((CurrentChar != '\0') && ((CurrentChar == '.') || ((CurrentChar >= '0') && (CurrentChar <= '9'))))
 	{
 		if(CurrentChar == '.')
 		{
 			if(DotEncountered) break;
 			DotEncountered = true;
-			Dest[Index++] = '.';
-		}
-		else
-		{
-			Dest[Index++] = CurrentChar;
 		}
 
+		Length++;
 		Advance(LexerState);
 		CurrentChar = LexerState->CurrentChar;
 	}
-	Dest[Index] = '\0';
-	Token->EndPos = LexerState->Pos;
 
-	CopyToString(Dest, Token->Value, ArrayCount(Token->Value));
+	token *Token = (token *)PushDynamicSize_(&LexerState->TokenMemory, sizeof(token) + Length + 1);
+	Token->Value = (char *)(Token + 1);
+	Token->StartPos = StartPos;
+	Token->EndPos = LexerState->Pos;
+	CopyDelimitString(LexerState->TextMemory, StartIndex, Length, Token->Value);
 	if(DotEncountered) Token->Type = TT_REAL;
 	else Token->Type = TT_INT;
 
 	return Token;
 }
 
-#define AppendWordToList(LexerState, Dest) AppendWordToList_(LexerState, Dest, ArrayCount(Dest))
 internal token *
-AppendWordToList_(lexer_state *LexerState, char *Temp, int32 TempLength)
+AppendWordToken(lexer_state *LexerState)
 {
-	Assert(TempLength);
-
-	token *Token = PushStruct(&LexerState->TokenMemory, token);
-	Token->StartPos = LexerState->Pos;
-
+	position StartPos = LexerState->Pos;
 	char CurrentChar = LexerState->CurrentChar;
-	int32 Index = 0;
+	int32 StartIndex = LexerState->Pos.Index;
+	int32 Length = 0;
 	while((CurrentChar >= 'a' && CurrentChar <= 'z') ||
 		  (CurrentChar >= 'A' && CurrentChar <= 'Z'))
 	{
-		Temp[Index++] = CurrentChar;
-
+		Length++;
 		Advance(LexerState);
 		CurrentChar = LexerState->CurrentChar;
 	}
 
-	Temp[Index] = '\0';
+	token *Token = (token *)PushDynamicSize_(&LexerState->TokenMemory, sizeof(token) + Length + 1);
+	Token->Value = (char *)(Token + 1);
+	Token->StartPos = StartPos;
 	Token->EndPos = LexerState->Pos;
-
-	CopyToString(Temp, Token->Value, ArrayCount(Token->Value));
+	CopyDelimitString(LexerState->TextMemory, StartIndex, Length, Token->Value);
 	if(StringToArrayCompare(Token->Value, KEYWORDS)) Token->Type = TT_KEYWORD;
 	else Token->Type = TT_ID;
+
+	return Token;
+}
+
+inline char
+LookAheadChar(lexer_state *LexerState)
+{
+	return LexerState->TextMemory[LexerState->Pos.Index + 1];
+}
+
+internal token *
+AppendStringToken(lexer_state *LexerState, char Delimit)
+{
+	Advance(LexerState);
+	position StartPos = LexerState->Pos;
+	int32 StartIndex = LexerState->Pos.Index;
+	int32 Length = 0;
+	while(LexerState->CurrentChar != Delimit)
+	{
+		Length++;
+		Advance(LexerState);
+	}
+
+	token *Token = (token *)PushDynamicSize_(&LexerState->TokenMemory, sizeof(token) + Length + 1);
+	Token->Value = (char *)(Token + 1);
+	Token->StartPos = StartPos;
+	Token->EndPos = LexerState->Pos;
+	CopyDelimitString(LexerState->TextMemory, StartIndex, Length, Token->Value);
+	Token->Type = TT_STRING;
 
 	return Token;
 }
@@ -198,75 +215,133 @@ PopulateTokens(lexer_state *LexerState)
 	CurrentChar[0] = LexerState->CurrentChar;
 	CurrentChar[1] = '\0';
 	char Temp[100];
-	Temp[99] = '\0';
 
 	while(CurrentChar[0] != '\0')
 	{
-		if(*CurrentChar == ' ' || *CurrentChar == '\t')
-		{
-			Advance(LexerState);
-		}
-		else if((*CurrentChar >= '0') && (*CurrentChar <= '9'))
-		{
-			AppendNumberToList(LexerState, Temp);
-		}
-		else if((*CurrentChar >= 'a' && *CurrentChar <= 'z') ||
-				(*CurrentChar >= 'A' && *CurrentChar <= 'Z'))
-		{
-			AppendWordToList(LexerState, Temp);
-		}
-		else if(*CurrentChar == '+')
-		{
-			AppendToTokenList(LexerState, CurrentChar, TT_PLUS, &LexerState->Pos);
-			Advance(LexerState);
-		}
-		else if(*CurrentChar == '-')
-		{
-			AppendToTokenList(LexerState, CurrentChar, TT_MINUS, &LexerState->Pos);
-			Advance(LexerState);
-		}
-		else if(*CurrentChar == '*')
-		{
-			AppendToTokenList(LexerState, CurrentChar, TT_MUL, &LexerState->Pos);
-			Advance(LexerState);
-		}
-		else if(*CurrentChar == '^')
-		{
-			AppendToTokenList(LexerState, CurrentChar, TT_POW, &LexerState->Pos);
-			Advance(LexerState);
-		}
-		else if(*CurrentChar == '/')
-		{
-			AppendToTokenList(LexerState, CurrentChar, TT_DIV, &LexerState->Pos);
-			Advance(LexerState);
-		}
-		else if(*CurrentChar == '=')
-		{
-			AppendToTokenList(LexerState, CurrentChar, TT_EQ, &LexerState->Pos);
-			Advance(LexerState);
-		}
-		else if(*CurrentChar == '(')
-		{
-			AppendToTokenList(LexerState, CurrentChar, TT_LPAREN, &LexerState->Pos);
-			Advance(LexerState);
-		}
-		else if(*CurrentChar == ')')
-		{
-			AppendToTokenList(LexerState, CurrentChar, TT_RPAREN, &LexerState->Pos);
-			Advance(LexerState);
-		}
+		if((*CurrentChar >= '0') && (*CurrentChar <= '9')) AppendNumberToken(LexerState);
+		else if((*CurrentChar >= 'a' && *CurrentChar <= 'z') || (*CurrentChar >= 'A' && *CurrentChar <= 'Z')) AppendWordToken(LexerState);
 		else
 		{
-			Advance(LexerState);
-			Concat(Temp, false, "'", CurrentChar, "'", " is not a valid character!");
-			Status.Error = MakeError(CharacterError, Temp);
-			return Status;
-		}
+			switch(*CurrentChar)
+			{
+				case ' ': break;
+				case '\t': break;
+				case '\r': break;
+				case '\n': AppendCharToken(LexerState, "NEWLINE", TT_NEWLINE); break;
+				case '+': AppendCharToken(LexerState, CurrentChar, TT_PLUS); break;
+				case '-': AppendCharToken(LexerState, CurrentChar, TT_MINUS); break;
+				case '^': AppendCharToken(LexerState, CurrentChar, TT_POW); break;
+				case '(': AppendCharToken(LexerState, CurrentChar, TT_LPAREN); break;
+				case ')': AppendCharToken(LexerState, CurrentChar, TT_RPAREN); break;
+				case '{': AppendCharToken(LexerState, CurrentChar, TT_LCBRACKET); break;
+				case '}': AppendCharToken(LexerState, CurrentChar, TT_RCBRACKET); break;
+				case ',': AppendCharToken(LexerState, CurrentChar, TT_COMMA); break;
+				case '*': AppendCharToken(LexerState, CurrentChar, TT_MUL); break;
+				case '\'': AppendStringToken(LexerState, *CurrentChar); break;
+				case '"': AppendStringToken(LexerState, *CurrentChar); break;
+				case '/': 
+				{
+					if(LookAheadChar(LexerState) == '/')
+					{
+						while(LexerState->CurrentChar != '\n') Advance(LexerState);
+					}
+					else if(LookAheadChar(LexerState) == '*')
+					{
+						while(!(LexerState->CurrentChar == '*' && LookAheadChar(LexerState) == '/'))
+						{
+							if(LexerState->CurrentChar == '\0')
+							{
+								Status.Error = MakeError(InvalidSyntaxError,  "Multi-line comment must match with closing '*/' symbols");
+								return Status;
+							}
+							Advance(LexerState);
+						}
+						Advance(LexerState);
+					}
+					else AppendCharToken(LexerState, CurrentChar, TT_DIV);
+				} break;
+				case '&':
+			  	{
+					if(LookAheadChar(LexerState) == '&')
+					{
+						AppendCharToken(LexerState, "&&", TT_AND);
+						Advance(LexerState);
+					}
+					else 
+					{
+						Advance(LexerState);
+						Status.Error = MakeError(CharacterError, "'&' is not a valid character, did you mean '&&'?");
+						return Status;
+					}
+				} break;
+				case '|':
+			  	{
+					if(LookAheadChar(LexerState) == '|')
+					{
+						AppendCharToken(LexerState, "||", TT_OR);
+						Advance(LexerState);
+					}
+					else 
+					{
+						Advance(LexerState);
+						Status.Error = MakeError(CharacterError, "'|' is not a valid character, did you mean '||'?");
+						return Status;
+					}
+				} break;
+				case '=':
+			  	{
+					if(LookAheadChar(LexerState) == '=')
+					{
+						AppendCharToken(LexerState, "==", TT_EQEQ);
+						Advance(LexerState);
+					}
+					else AppendCharToken(LexerState, CurrentChar, TT_EQ);
+				} break;
 
+				case '!':
+			  	{
+					if(LookAheadChar(LexerState) == '=')
+					{
+						AppendCharToken(LexerState, "!=", TT_NEQ);
+						Advance(LexerState);
+					}
+					else AppendCharToken(LexerState, CurrentChar, TT_NOT);
+				} break;
+
+				case '<':
+				{
+					if(LookAheadChar(LexerState) == '=')
+					{
+						AppendCharToken(LexerState, "<=", TT_LTE);
+						Advance(LexerState);
+					}
+					else AppendCharToken(LexerState, CurrentChar, TT_LT);
+				} break;
+
+				case '>': 
+				{
+					if(LookAheadChar(LexerState) == '=')
+					{
+						AppendCharToken(LexerState, ">=", TT_GTE);
+						Advance(LexerState);
+					}
+					else AppendCharToken(LexerState, CurrentChar, TT_GT);
+				} break;
+
+				default:
+				{
+					Advance(LexerState);
+					Concat(Temp, false, "'", CurrentChar, "'", " is not a valid character!");
+					Status.Error = MakeError(CharacterError, Temp);
+					return Status;
+				} break;
+			}
+			Advance(LexerState);
+		}
 		CurrentChar[0] = LexerState->CurrentChar;
 	}
 
-	AppendToTokenList(LexerState, TokenTypeString[TT_EOF], TT_EOF, &LexerState->Pos);
+	AppendCharToken(LexerState, "EOF", TT_EOF);
 
 	Status.Success = true;
 	return Status;

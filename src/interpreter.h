@@ -6,36 +6,21 @@
     |                                                                                  |
     +=====================| Sayed Abid Hashimi, Copyright © All rights reserved |======+  */
 
+// Translatable Lang
+
 #if !defined(INTERPRETER_H)
 
 struct interpreter_state
 {
-	memory_arena RuntimeMem;
-
-	memory_arena Stack;
+	dynamic_memory_arena RuntimeMem;
 };
 
 enum var_type
 {
 	VarType_undefined,
 	VarType_number,
-};
-
-struct symbol_table
-{
-	uint32 SymbolSize;
-	memory_arena Arena;
-
-	symbol_table *Parent;
-};
-
-struct context
-{
-	char *DisplayName;
-	context *Parent;
-	position *ParentPos;
-
-	symbol_table *SymbolTable;
+	VarType_string,
+	VarType_boolean_,
 };
 
 struct var
@@ -47,6 +32,35 @@ struct symbol
 {
 	char *Name;
 	var *Value;
+
+	symbol *Next;
+};
+
+struct symbol_table
+{
+	uint32 SymbolSize;
+	symbol *Symbols;
+
+	symbol_table *Parent;
+};
+
+#if 0
+struct symbol_table
+{
+	uint32 SymbolSize;
+	memory_arena Arena;
+
+	symbol_table *Parent;
+};
+#endif
+
+struct context
+{
+	char *DisplayName;
+	context *Parent;
+	position *ParentPos;
+
+	symbol_table *SymbolTable;
 };
 
 struct number
@@ -54,6 +68,16 @@ struct number
 	number_type Type;
 	int32 Int;
 	real32 Real;
+};
+
+struct string
+{
+	char *Value;
+};
+
+struct boolean_
+{
+	char Value;
 };
 
 struct visit_result

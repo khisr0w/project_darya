@@ -9,12 +9,11 @@
 #if !defined(PARSER_H)
 struct parser_state
 {
-	memory_arena AST;
+	dynamic_memory_arena AST;
 
-	token *Tokens;
 	uint32 TokenLength;
 	int32 Token_Id;
-	token CurrentToken;
+	token *CurrentToken;
 };
 
 enum node_type
@@ -25,6 +24,17 @@ enum node_type
 	NodeType_binary_node,
 	NodeType_var_assign_node,
 	NodeType_var_access_node,
+	NodeType_comparison_node,
+	NodeType_compound_compare_node,
+	NodeType_statements_node,
+	NodeType_function_call_node,
+	NodeType_function_def_node,
+	NodeType_if_node,
+	NodeType_other_node,
+	NodeType_else_node,
+	NodeType_string_node,
+
+	// NodeType_end_of_file_node,
 };
 
 enum number_type
@@ -65,6 +75,13 @@ struct number_node
 	real32 Real;
 };
 
+struct string_node
+{
+	node_pos Pos;
+
+	char *Value;
+};
+
 struct unary_node
 {
 	node_pos Pos;
@@ -73,7 +90,25 @@ struct unary_node
 	node *Node;
 };
 
+struct comparison_node
+{
+	node_pos Pos;
+
+	node *LeftNode;
+	token OpToken;
+	node *RightNode;
+};
+
 struct binary_node
+{
+	node_pos Pos;
+
+	node *LeftNode;
+	token OpToken;
+	node *RightNode;
+};
+
+struct compound_compare_node
 {
 	node_pos Pos;
 
@@ -96,6 +131,68 @@ struct var_access_node
 	node_pos Pos;
 
 	token Name;
+};
+
+struct statements_node
+{
+	node_pos Pos;
+
+	node **Statement;
+	uint32 Length;
+	uint32 MaxLength;
+};
+
+struct function_call_node
+{
+	node_pos Pos;
+
+	token FuncName;
+	node **Args;
+	uint32 ArgLength;
+	uint32 MaxLength;
+};
+
+struct if_node
+{
+	node_pos Pos;
+
+	node *Body;
+	node *Condition;
+	node **Others;
+	node *Else;
+	uint32 OtherLength;
+	uint32 MaxOtherLength;
+};
+
+struct other_node
+{
+	node_pos Pos;
+
+	node *Body;
+	node *Condition;
+};
+
+struct else_node
+{
+	node_pos Pos;
+
+	node *Body;
+};
+
+struct function_def_node
+{
+	node_pos Pos;
+
+	token FuncName;
+	node **Args;
+	node *Body;
+	uint32 ArgLength;
+	uint32 MaxArgLength;
+};
+
+struct end_of_file_node
+{
+	node_pos Pos;
 };
 
 #define PARSER_H

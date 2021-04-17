@@ -8,53 +8,49 @@
 
 #if !defined(LEXER_H)
 
-char DIGITS[] = {'0', '1', '2', '3', '4', '5', '6', '7', '8', '9'};
-
 enum token_type
 {
 	TT_UNDEFINED,
 	TT_KEYWORD,
 	TT_ID,
-	TT_INT,
-	TT_REAL,
 	TT_PLUS,
 	TT_MINUS,
 	TT_MUL,
 	TT_DIV,
 	TT_POW,
 	TT_EQ,
+	TT_EQEQ,
+	TT_NEQ,
+	TT_NOT,
+	TT_GT,
+	TT_GTE,
+	TT_LT,
+	TT_LTE,
+	TT_AND,
+	TT_OR,
+	TT_INT,
+	TT_REAL,
+	TT_STRING,
 	TT_LPAREN,
 	TT_RPAREN,
+	TT_COMMA,
+	TT_LCBRACKET,
+	TT_RCBRACKET,
+	TT_NEWLINE,
 	TT_EOF,
-};
-
-char *TokenTypeString[] = 
-{
-	"UNDEFINED",
-	"KEYWORD",
-	"ID",
-	"INTEGER",
-	"REAL",
-	"PLUS",
-	"MINUS",
-	"MULTIPLICATION",
-	"DIVISION",
-	"POWER",
-	"EQUAL",
-	"LPAREN",
-	"RPAREN",
-	"EOF",
 };
 
 char *KEYWORDS[] =
 {
 	"var",
+	"if",
+	"other", // used instead of **else if**
+	"else",
 };
 
 struct position
 {
 	char *FileName;
-	char *TextMemory;
 	int32 Index;
 	int32 Line;
 	int32 Col;
@@ -63,7 +59,7 @@ struct position
 // TODO(Khisrow): WARNING This should be changed to memory block soon
 struct token
 {
-	char Value[64];
+	char *Value;
 	token_type Type;
 
 	position StartPos;
@@ -86,7 +82,9 @@ struct error
 
 struct lexer_state
 {
-	memory_arena TokenMemory;
+	// memory_arena TokenMemory;
+	dynamic_memory_arena TokenMemory;
+	char *TextMemory;
 	position Pos;
 	char CurrentChar;
 };
@@ -94,10 +92,6 @@ struct lexer_state
 struct text_memory
 {
 	memory_arena Arena;
-};
-
-struct runtime_state
-{
 };
 
 struct op_status

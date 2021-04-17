@@ -10,20 +10,6 @@
 
 #define MAX_FILENAME 260
 
-#if DEBUG
-#define Assert(Expression) if(!(Expression)) {*(int*)0 = 0;}
-#define InvalidCodePath Assert(!"InvalidCodePath")
-#else
-#define Assert(Expression)
-#endif
-
-#define ArrayCount(Array) (sizeof((Array)) / sizeof((Array)[0]))
-
-#define Kilobytes(Value) ((Value) * 1024LL)
-#define Megabytes(Value) (Kilobytes(Value) * 1024LL)
-#define Gigabytes(Value) (Megabytes(Value) * 1024LL)
-#define Terabytes(Value) (Gigabytes(Value) * 1024LL)
-
 
 #define Concat(Dest, Bool, ...) Concat_(Dest, Bool, ArrayCount(Dest), __VA_ARGS__)
 #define Concat_(Dest, Bool, Length, ...) {\
@@ -70,6 +56,93 @@ PushSize_(memory_arena *MemoryArena, memory_index Size)
 		MemoryArena->Used += Size;
 	}
 	else InvalidCodePath;
+
+	return Result;
+}
+
+#define GetBlockValue(Block, Type) (Type *)GetBlockValue_(Block)
+inline void *
+GetBlockValue_(dynamic_memory_block *Block)
+{
+	return (Block + 1);
+}
+
+#define PushDynamicStruct(Arena, Struct) (Struct *)PushDynamicSize_(Arena, sizeof(Struct))
+#define PushDynamicSize(Arena, Struct, Size) (Struct *)PushDynamicSize_(Arena, sizeof(Struct)*(Size))
+inline void *
+PushDynamicSize_(dynamic_memory_arena *MemoryArena, memory_index Size)
+{
+	dynamic_memory_block *Memory = (dynamic_memory_block *)PlatformAllocMem(sizeof(dynamic_memory_block) + Size);
+	Assert(Memory);
+	if(Memory)
+	{
+		if(MemoryArena->LastBlock) MemoryArena->LastBlock->Next = Memory;
+		else MemoryArena->Blocks = Memory;
+		MemoryArena->LastBlock = Memory;
+
+		MemoryArena->MemSize += PlatformMemSize(Memory);
+		MemoryArena->Length++;
+	}
+
+	return (Memory + 1);
+}
+
+// TODO(Khisrow): WARNING This is broken, fix the LastBlock Bug
+internal bool32
+FreeDynamicBlock(dynamic_memory_arena *MemoryArena, void *MemoryToDelete)
+{
+	bool32 Result = false;
+
+	int Length = 0;
+	dynamic_memory_block *PriorBlock = 0;
+	for(dynamic_memory_block *Block = MemoryArena->Blocks;
+		Block;
+		Block = Block->Next)
+	{
+		Length++;
+		if(((Block + 1) == MemoryToDelete) || (Block == MemoryToDelete))
+		{
+			if(PriorBlock) PriorBlock->Next = Block->Next;
+			else MemoryArena->Blocks = Block->Next;
+			if(Length == MemoryArena->Length) MemoryArena->LastBlock = PriorBlock;
+			MemoryArena->MemSize -= PlatformMemSize(Block);
+			PlatformFreeMem(Block);
+			MemoryArena->Length--;
+
+			Result = true;
+			break;
+		}
+
+		PriorBlock = Block;
+	}
+
+	return Result;
+}
+
+internal bool32
+FreeDynamicArena(dynamic_memory_arena *MemoryArena)
+{
+	bool32 Result = false;
+
+	dynamic_memory_block *NextBlock = 0;
+	for(dynamic_memory_block *Block = MemoryArena->Blocks;
+		Block;
+		Block = NextBlock)
+	{
+		NextBlock = Block->Next;
+
+		MemoryArena->MemSize -= PlatformMemSize(Block);
+		bool32 Res = PlatformFreeMem(Block);
+		MemoryArena->Length--;
+	}
+
+	Assert(MemoryArena->Length == 0);
+	if(MemoryArena->Length == 0)
+	{
+		MemoryArena->Blocks = 0;
+		MemoryArena->LastBlock = 0;
+		Result = true;
+	}
 
 	return Result;
 }
@@ -124,6 +197,21 @@ CopyToString(char Source, char *Dest, int32 DestListLength = -1)
 	Assert(DestLength > 0);
 
 	*Dest++ = Source;
+	*Dest = '\0';
+}
+
+inline void
+CopyDelimitString(char *Source, int32 Index, int32 Length, char *Dest)
+{
+	Source = Source + Index;
+
+	int32 LastIndex = Index + Length - 1;
+	while(Index <= LastIndex)
+	{
+		*Dest++ = *Source++;
+		++Index;
+	}
+
 	*Dest = '\0';
 }
 
@@ -438,16 +526,27 @@ ToString(char Char, char* Dest)
 	return Result;
 }
 
+inline int32
+IntLength(int32 Value)
+{
+	int32 Length = 0;
+	while(Value)
+	{
+		int32 Remain = Value % 10;
+		Value = (int32)((Value - Remain) * 0.1f);
+		++Length;
+	}
+
+	return Length;
+}
+
 inline char *
 ToString(int32 Value, char *String, int32 *StartIndex = 0, char EndChar = '\0')
 {
 	char Reverse[MAX_STRING];
 	int32 *StrIndex = 0;
 	int32 Temp = 0;
-	if(StartIndex) 
-	{
-		StrIndex = StartIndex;
-	}
+	if(StartIndex) StrIndex = StartIndex;
 	else StrIndex = &Temp;
 
 	if(Value == 0)
@@ -463,7 +562,6 @@ ToString(int32 Value, char *String, int32 *StartIndex = 0, char EndChar = '\0')
 		Value *= -1;
 	}
 
-
 	int32 RevIndex = 0;
 	while(Value)
 	{
@@ -472,14 +570,33 @@ ToString(int32 Value, char *String, int32 *StartIndex = 0, char EndChar = '\0')
 		Value = (int32)((Value - Remain) * 0.1f);
 	}
 
-	for(; RevIndex > 0;)
-	{
-		String[(*StrIndex)++] = Reverse[--RevIndex];
-	}
+	for(; RevIndex > 0;) String[(*StrIndex)++] = Reverse[--RevIndex];
 
 	String[(*StrIndex)++] = EndChar;
 
 	return String;
+}
+
+inline int32
+Real32Length(real32 Value)
+{
+	int32 Length = 0;
+	int32 Mantissa = (int32)Value;
+
+	Length = IntLength(Mantissa);
+	Length++;
+
+	real32 Subtract = (real32)(Value - Mantissa);
+	if(Subtract < 0) Subtract *= -1;
+	real32 Exponent = Subtract;
+	while(true)
+	{
+		Exponent *= 10;
+		Length++;
+		if(Exponent == (int32)Exponent) break;
+	}
+
+	return Length;
 }
 
 inline char *

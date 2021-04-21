@@ -4,9 +4,9 @@ Targeted specifically towards Afghan school kids.\
 The Project is written **entirely from scratch** with no external libraries involved, even C runtime library functions are not included in the code.
 
 ## Examples
-Example code to find the minimum number
-![Example code to find the minimum number](/msc/example_min.jpg)\
-Gradient descent of a simple loss function $f(x) = x^2 + x + 1$  
+Example code to find the minimum number\
+![Example code to find the minimum number](/msc/example_min.jpg)
+Gradient descent of a simple loss function f(x) = x^2 + x + 1\
 ![Gradient descent of a simple loss function](/msc/example_gradient_descent.jpg)
 ## Notice
 The project is still in heavy development and so inexperienced users are discouraged to use it as their de-facto programming exercise.\

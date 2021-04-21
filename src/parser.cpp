@@ -245,7 +245,7 @@ MakeNode_(parser_state *ParserState, token *Token, node *First, node *Second, no
 		{
 			Result = PushNode(ParserState, function_call_node);
 			function_call_node *FuncCallNode = (function_call_node *)(Result + 1);
-			FuncCallNode->MaxLength = 4;
+			FuncCallNode->MaxLength = 10;
 			FuncCallNode->Args = (node **)PushDynamicSize_(&ParserState->AST,
 														   FuncCallNode->MaxLength*sizeof(node **));
 			FuncCallNode->ArgLength = 0;
@@ -295,6 +295,26 @@ MakeNode_(parser_state *ParserState, token *Token, node *First, node *Second, no
 			ElseNode->Pos.Start = Token->StartPos;
 			ElseNode->Pos.End = Token->EndPos;
 		} break;
+		case NodeType_while_node:
+		{
+			Result = PushNode(ParserState, while_node);
+			while_node *WhileNode = (while_node *)(Result + 1);
+
+			WhileNode->Pos.Start = Token->StartPos;
+			WhileNode->Pos.End = Token->EndPos;
+		} break;
+		case NodeType_out_node:
+		{
+			Result = (node *)PushDynamicSize_(&ParserState->AST, sizeof(node));
+			Result->Header.Type = NodeType_out_node;
+		} break;
+
+		case NodeType_ignore_node:
+		{
+			Result = (node *)PushDynamicSize_(&ParserState->AST, sizeof(node));
+			Result->Header.Type = NodeType_ignore_node;
+		} break;
+
 		case NodeType_string_node:
 		{
 			Result = PushNode(ParserState, string_node);
@@ -305,7 +325,6 @@ MakeNode_(parser_state *ParserState, token *Token, node *First, node *Second, no
 			StringNode->Pos.Start = Token->StartPos;
 			StringNode->Pos.End = Token->EndPos;
 		} break;
-
 		// case NodeType_end_of_file_node:
 		// {
 		// 	Result = PushNode(ParserState, end_of_file_node);
@@ -347,7 +366,7 @@ BinaryOperation_(parser_state *ParserState, bin_op_delegate *DelegateFuncA,
 	return OnParseSuccess(&Result, Left);
 }
 
-inline parser_result Statement(parser_state *ParserState);
+inline parser_result Statement(parser_state *ParserState, bool32 Loop=false);
 inline parser_result CompareExpression(parser_state *ParserState);
 
 inline parser_result
@@ -372,6 +391,7 @@ CompoundCompareExpression(parser_state *ParserState)
 	return OnParseSuccess(&Result, Left);
 }
 
+// TODO(Khisrow): This is dumb!!! Two function that does the same thing, just with one param difference???
 inline node *
 PushFunctionArg(function_def_node *FuncDefNode, node *Memory)
 {
@@ -393,6 +413,7 @@ PushFunctionArg(function_def_node *FuncDefNode, node *Memory)
 	return *Node;
 }
 
+// TODO(Khisrow): WARNING ReAlloc Fails due to memory corruption i presume
 inline node *
 PushFunctionArg(function_call_node *FuncCallNode, node *Memory)
 {
@@ -597,10 +618,10 @@ CompareExpression(parser_state *ParserState)
 	return OnParseSuccess(&Result, Left);
 }
 
-inline parser_result Statements(parser_state *ParserState);
+inline parser_result Statements(parser_state *ParserState, bool32 Loop=false);
 
 internal parser_result
-MakeConditionalBlock(parser_state *ParserState, node *Node, bool32 Condition=true)
+MakeConditionalBlock(parser_state *ParserState, node *Node, bool32 Loop, bool32 Condition=true)
 {
 	parser_result Result = {};
 
@@ -625,18 +646,18 @@ MakeConditionalBlock(parser_state *ParserState, node *Node, bool32 Condition=tru
 
 	if(ParserState->CurrentToken->Type == TT_NEWLINE) Advance(ParserState);
 	if(ParserState->CurrentToken->Type != TT_LCBRACKET)
-		return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '{' prior to conditional body statement"));
+		return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '{' prior to body statement"));
 	Advance(ParserState);
 
 	while(ParserState->CurrentToken->Type == TT_NEWLINE) Advance(ParserState);
 	if(ParserState->CurrentToken->Type == TT_RCBRACKET) return Result;
 
-	node *IfBody = OnParseRegister(&Result, Statements(ParserState));
+	node *IfBody = OnParseRegister(&Result, Statements(ParserState, Loop));
 	if (Result.Error.Type != NoError) return Result;
 
 	while(ParserState->CurrentToken->Type == TT_NEWLINE) Advance(ParserState);
 	if(ParserState->CurrentToken->Type != TT_RCBRACKET)
-		return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '}' after conditional statement block"));
+		return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '}' after body statement"));
 	IfConditionalNode->Pos.End = ParserState->CurrentToken->EndPos;
 	Advance(ParserState);
 	IfConditionalNode->Body = IfBody;
@@ -645,7 +666,7 @@ MakeConditionalBlock(parser_state *ParserState, node *Node, bool32 Condition=tru
 }
 
 inline parser_result
-Statement(parser_state *ParserState)
+Statement(parser_state *ParserState, bool32 Loop)
 {
 	parser_result Result = {};
 
@@ -702,12 +723,12 @@ Statement(parser_state *ParserState)
 				return OnParseSuccess(&Result, FuncNode);
 			}
 		}
-		if(StringCompare(ParserState->CurrentToken->Value, "if"))
+		else if(StringCompare(ParserState->CurrentToken->Value, "if"))
 		{
 			node *Node = MakeNode(ParserState, ParserState->CurrentToken, 0, 0, if_node);
 			Advance(ParserState);
 			if_node *IfNode = (if_node *)(Node + 1);
-			OnParseRegister(&Result, MakeConditionalBlock(ParserState, Node));
+			OnParseRegister(&Result, MakeConditionalBlock(ParserState, Node, Loop));
 			if(Result.Error.Type != NoError) return Result;
 
 			token *AheadToken = ParserState->CurrentToken;
@@ -731,7 +752,7 @@ Statement(parser_state *ParserState)
 				{
 					Advance(ParserState);
 					node *OtherNode = MakeNode(ParserState, ParserState->CurrentToken, 0, 0, other_node);
-					OnParseRegister(&Result, MakeConditionalBlock(ParserState, OtherNode));
+					OnParseRegister(&Result, MakeConditionalBlock(ParserState, OtherNode, Loop));
 					if(Result.Error.Type != NoError) return Result;
 
 					if(IfNode->OtherLength >= IfNode->MaxOtherLength)
@@ -758,12 +779,42 @@ Statement(parser_state *ParserState)
 			{
 				Advance(ParserState);
 				node *ElseNode = MakeNode(ParserState, ParserState->CurrentToken, 0, 0, else_node);
-				OnParseRegister(&Result, MakeConditionalBlock(ParserState, ElseNode, false));
+				OnParseRegister(&Result, MakeConditionalBlock(ParserState, ElseNode, Loop, false));
 				if(Result.Error.Type != NoError) return Result;
 				IfNode->Else = ElseNode;
 			}
 
 			return OnParseSuccess(&Result, Node);
+		}
+		else if(StringCompare(ParserState->CurrentToken->Value, "while"))
+		{
+			node *Node = MakeNode(ParserState, ParserState->CurrentToken, 0, 0, while_node);
+			Advance(ParserState);
+			// while_node *WhileNode = (while_node *)(Node + 1);
+			OnParseRegister(&Result, MakeConditionalBlock(ParserState, Node, true));
+			if(Result.Error.Type != NoError) return Result;
+
+			return OnParseSuccess(&Result, Node);
+		}
+		else if(StringCompare(ParserState->CurrentToken->Value, "out"))
+		{
+			if(Loop)
+			{
+				node *Node = MakeNode(ParserState, 0, 0, 0, out_node);
+				Advance(ParserState);
+				return OnParseSuccess(&Result, Node);
+			}
+			else return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "out keyword not allowed outside of a loop"));
+		}
+		else if(StringCompare(ParserState->CurrentToken->Value, "ignore"))
+		{
+			if(Loop)
+			{
+				node *Node = MakeNode(ParserState, 0, 0, 0, ignore_node);
+				Advance(ParserState);
+				return OnParseSuccess(&Result, Node);
+			}
+			else return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "ignore keyword not allowed outside of a loop"));
 		}
 	}
 
@@ -792,7 +843,7 @@ PushStatement(statements_node *Statements, node *Memory)
 }
 
 inline parser_result
-Statements(parser_state *ParserState)
+Statements(parser_state *ParserState, bool32 Loop)
 {
 	parser_result Result = {};
 	node *Node = MakeNode(ParserState, 0, 0, 0, statements_node);
@@ -801,7 +852,7 @@ Statements(parser_state *ParserState)
 	{
 		while(ParserState->CurrentToken->Type == TT_NEWLINE) Advance(ParserState);
 		if((ParserState->CurrentToken->Type == TT_EOF) || (ParserState->CurrentToken->Type == TT_RCBRACKET)) break;
-		parser_result ParResult = Statement(ParserState);
+		parser_result ParResult = Statement(ParserState, Loop);
 		if(ParResult.Error.Type != NoError) return ParResult;
 		PushStatement(StatementsNode, ParResult.Node);
 	} while(ParserState->CurrentToken->Type == TT_NEWLINE);
@@ -812,7 +863,9 @@ Statements(parser_state *ParserState)
 inline parser_result
 ParseTokens(parser_state *ParserState)
 {
-	parser_result Result = Statements(ParserState);
+	void *Mem = PlatformAllocMem(16*sizeof(char));
+	Mem = PlatformReallocMem(Mem, 32*sizeof(char));
+	parser_result Result = Statements(ParserState, false);
 	if((Result.Error.Type == NoError) && (ParserState->CurrentToken->Type != TT_EOF))
 	{
 		return OnParseFailure(&Result, MakeError(InvalidSyntaxError, "Expected '+', '-', '*', '/' as the operator"));

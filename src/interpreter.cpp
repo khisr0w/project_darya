@@ -42,6 +42,7 @@ inline var *
 OnVisitRegister(visit_result *Result, visit_result VisitResult)
 {
 	if(VisitResult.Error.Type != NoError) Result->Error = VisitResult.Error;
+	else Result->Status = VisitResult.Status;
 	return VisitResult.Var;
 }
 
@@ -67,7 +68,7 @@ IsTokenType(token Token, token_type Type) { return Token.Type == Type; }
 inline bool32
 IsNodeType(node *Node, node_type Type) { return Node->Header.Type == Type; }
 
-inline visit_result Visit(interpreter_state *InterState, node *Node, context* Context);
+inline visit_result Visit(interpreter_state *InterState, node *Node, context* Context, bool32 Loop=false);
 
 #define MakeVar(Arena, Struct) MakeVar_(Arena, sizeof(Struct), VarType_##Struct)
 inline var *
@@ -532,7 +533,7 @@ GetHashFromSymbolTable(symbol_table *SymbolTable, char* SymName, bool32 New)
 		int32 SymNameLength = StringLength(SymName);
 		uint32 HashValue = 0;
 		for(uint32 Index = 0;
-			(Index <= 2) && (Index < SymNameLength);
+			(Index <= 5) || (Index < SymNameLength);
 			++Index)
 		{
 			int32 Arb = (int32)(137/(Index + 1));
@@ -921,7 +922,7 @@ Visit_Comparison(interpreter_state *InterState, node *Node, context *Context)
 // TODO(Khisrow): Clean up after the statement is done, free blocks after each 5 statements
 // TODO(Khisrow): Fix the VarAccess routine, this could memory bleeding
 inline visit_result
-Visit_Statements(interpreter_state *InterState, node *Node, context *Context)
+Visit_Statements(interpreter_state *InterState, node *Node, context *Context, bool32 Loop=false)
 {
 	visit_result Result = {};
 
@@ -931,14 +932,49 @@ Visit_Statements(interpreter_state *InterState, node *Node, context *Context)
 		++Index)
 	{
 		node *Node = *(StatementsNode->Statement + Index);
-		OnVisitRegister(&Result, Visit(InterState, Node, Context));
+		if(Node->Header.Type == NodeType_out_node)
+		{
+			Result.Status = Status_OUT;
+		}
+		else if(Node->Header.Type == NodeType_ignore_node)
+		{
+			Result.Status = Status_IGNORE;
+		}
+		if(Result.Status == Status_OUT || Result.Status == Status_IGNORE) break;
+		OnVisitRegister(&Result, Visit(InterState, Node, Context, Loop));
 		if(Result.Error.Type != NoError) return Result;
 	}
 
 	return Result;
 }
 
-inline visit_result
+internal visit_result
+Visit_Func_Abs(interpreter_state *InterState, function_call_node *FuncCallNode, context *Context)
+{
+	visit_result Result = {};
+	if(FuncCallNode->ArgLength == 1)
+	{
+		var *Var = OnVisitRegister(&Result, Visit(InterState, *FuncCallNode->Args, Context));
+		if(Var->Type == VarType_number)
+		{
+			number *Number = GetVar(Var, number);
+			if(Number->Type == NumberType_Int)
+			{
+				if(Number->Int < 0) Number->Int *= -1;
+			}
+			else if(Number->Type == NumberType_Real)
+			{
+				if(Number->Real < 0.0f) Number->Real *= -1.0f;
+			}
+
+			return OnVisitSuccess(&Result, Var);
+		}
+		else return OnVisitFailure(&Result, MakeError(VisitError, "Expected number as an argument"));
+	}
+	else return OnVisitFailure(&Result, MakeError(VisitError, "Function abs() requires only one argument"));
+}
+
+internal visit_result
 Visit_Func_Print(interpreter_state *InterState, function_call_node *FuncCallNode, context *Context)
 {
 	visit_result Result = {};
@@ -1007,6 +1043,10 @@ Visit_FunctionCall(interpreter_state *InterState, node *Node, context *Context)
 	{
 		return Visit_Func_Input(InterState, FuncCallNode, Context);
 	}
+	else if(StringCompare(FuncCallNode->FuncName.Value, "abs"))
+	{
+		return Visit_Func_Abs(InterState, FuncCallNode, Context);
+	}
 	else
 	{
 		error Error = {};
@@ -1018,7 +1058,7 @@ Visit_FunctionCall(interpreter_state *InterState, node *Node, context *Context)
 
 // TODO(Khisrow): Make statements for scoping the variable definitions and whatnot
 internal visit_result
-Visit_IfCondition(interpreter_state *InterState, node *Node, context *Context)
+Visit_IfCondition(interpreter_state *InterState, node *Node, context *Context, bool32 Loop=false)
 {
 	visit_result Result = {};
 	if_node *IfNode = GetNode(Node, if_node);
@@ -1028,7 +1068,7 @@ Visit_IfCondition(interpreter_state *InterState, node *Node, context *Context)
 		boolean_ *Bool = GetVar(Var, boolean_);
 		if(Bool->Value == 1)
 		{
-			OnVisitRegister(&Result, Visit(InterState, IfNode->Body, Context));
+			OnVisitRegister(&Result, Visit(InterState, IfNode->Body, Context, Loop));
 			if(Result.Error.Type != NoError) return Result;
 		   	return OnVisitSuccess(&Result, Result.Var);
 		}
@@ -1042,7 +1082,7 @@ Visit_IfCondition(interpreter_state *InterState, node *Node, context *Context)
 				Bool = GetVar(Var, boolean_);
 				if(Bool->Value == 1)
 				{
-					OnVisitRegister(&Result, Visit(InterState, OtherNode->Body, Context));
+					OnVisitRegister(&Result, Visit(InterState, OtherNode->Body, Context, Loop));
 					if(Result.Error.Type != NoError) return Result;
 					return OnVisitSuccess(&Result, Result.Var);
 				}
@@ -1051,7 +1091,7 @@ Visit_IfCondition(interpreter_state *InterState, node *Node, context *Context)
 		if(IfNode->Else)
 		{
 			else_node *ElseNode = GetNode(IfNode->Else, else_node);
-			OnVisitRegister(&Result, Visit(InterState, ElseNode->Body, Context));
+			OnVisitRegister(&Result, Visit(InterState, ElseNode->Body, Context, Loop));
 			if(Result.Error.Type != NoError) return Result;
 			return OnVisitSuccess(&Result, Result.Var);
 		}
@@ -1064,8 +1104,31 @@ Visit_IfCondition(interpreter_state *InterState, node *Node, context *Context)
 	}
 }
 
+internal visit_result
+Visit_WhileLoop(interpreter_state *InterState, node *Node, context *Context)
+{
+	visit_result Result = {};
+	if_node *IfNode = GetNode(Node, if_node);
+	var *Var = OnVisitRegister(&Result, Visit(InterState, IfNode->Condition, Context));
+	if(Var->Type == VarType_boolean_)
+	{
+		while(((boolean_ *)(Var + 1))->Value == 1)
+		{
+			OnVisitRegister(&Result, Visit(InterState, IfNode->Body, Context, true));
+			if(Result.Error.Type != NoError) return Result;
+			if(Result.Status == Status_OUT) break;
+			if(Result.Status == Status_IGNORE) continue;
+			Var = OnVisitRegister(&Result, Visit(InterState, IfNode->Condition, Context));
+		}
+		Result.Status = Status_NONE;
+		return OnVisitSuccess(&Result, Result.Var);
+	}
+
+	return OnVisitFailure(&Result, MakeError(VisitError, "Unexpected expression in while statement predicate!, boolean expected"));
+}
+
 inline visit_result
-Visit(interpreter_state *InterState, node *Node, context* Context)
+Visit(interpreter_state *InterState, node *Node, context* Context, bool32 Loop)
 {
 	// TODO(Khisrow): Must apply firstvisit to avoid memory waste on the RuntimeMem
 	visit_result Result = {};
@@ -1106,7 +1169,7 @@ Visit(interpreter_state *InterState, node *Node, context* Context)
 		} break;
 		case NodeType_statements_node:
 		{
-			Result.Var = OnVisitRegister(&Result, Visit_Statements(InterState, Node, Context));
+			Result.Var = OnVisitRegister(&Result, Visit_Statements(InterState, Node, Context, Loop));
 		} break;
 		case NodeType_function_call_node:
 		{
@@ -1114,7 +1177,11 @@ Visit(interpreter_state *InterState, node *Node, context* Context)
 		} break;
 		case NodeType_if_node:
 		{
-			Result.Var = OnVisitRegister(&Result, Visit_IfCondition(InterState, Node, Context));
+			Result.Var = OnVisitRegister(&Result, Visit_IfCondition(InterState, Node, Context, Loop));
+		} break;
+		case NodeType_while_node:
+		{
+			Result.Var = OnVisitRegister(&Result, Visit_WhileLoop(InterState, Node, Context));
 		} break;
 		default: return OnVisitFailure(&Result, MakeError(VisitError, "Visit function not defined for this type!"));
 	}

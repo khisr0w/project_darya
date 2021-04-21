@@ -24,6 +24,7 @@ If you are an experienced C/C++ developer, with knowledge of programming languag
 - On the spot conversion of int to float and vice versa when the value precision allows it
 - MUST Support operator overloading
 - Make scope for the conditional, loop and function calls
+- Custom built function support within the language
 
 ## WARNINGs
 - Power operation is unstable and possibly unusable at this point and must fixed!

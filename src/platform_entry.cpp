@@ -10,6 +10,7 @@
 /* NOTE(Khisrow): BUGS!!!
 
    TODO(Khisrow):
+	   - Parser Func Def. ReAlloc fails due to some Memory corruption, MUST investigate
        - More Precise floating point conversion from string to float and vice versa
 	   - Robust power operation; handle wrapping around 32 bit and scientific notation of big numbers
 	   - MUST decide whether a fixed starting memory is a good idea for this or not?
@@ -18,6 +19,7 @@
 	   - Make scope for the conditional, loop and function calls
 
    WARNING(Khisrow):
+	   - Parser Func Def. ReAlloc fails due to some Memory corruption, MUST investigate
        - Power operation is unstable and possibly unusable at this point and must fixed!
        - Float-String conversion is extremely unstable and must be amended with a better algorithm
 
@@ -253,10 +255,10 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-#if 1
+#if 0
 			TextMemory = PlatformOpenSourceFile(argv[1]);
 #else
-			TextMemory = PlatformOpenSourceFile("./example.da");
+			TextMemory = PlatformOpenSourceFile("./gradient_descent.da");
 #endif
 			if(TextMemory.Arena.Size > 0)
 			{

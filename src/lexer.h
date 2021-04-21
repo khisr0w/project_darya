@@ -46,6 +46,9 @@ char *KEYWORDS[] =
 	"if",
 	"other", // used instead of **else if**
 	"else",
+	"while",
+	"out",
+	"ignore",
 };
 
 struct position

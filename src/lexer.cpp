@@ -160,7 +160,8 @@ AppendWordToken(lexer_state *LexerState)
 	int32 StartIndex = LexerState->Pos.Index;
 	int32 Length = 0;
 	while((CurrentChar >= 'a' && CurrentChar <= 'z') ||
-		  (CurrentChar >= 'A' && CurrentChar <= 'Z'))
+		  (CurrentChar >= 'A' && CurrentChar <= 'Z') ||
+		  (CurrentChar == '_'))
 	{
 		Length++;
 		Advance(LexerState);

@@ -80,9 +80,17 @@ struct boolean_
 	char Value;
 };
 
+enum status
+{
+	Status_NONE,
+	Status_OUT,
+	Status_IGNORE,
+};
+
 struct visit_result
 {
 	var *Var;
+	status Status;
 	error Error;
 };
 

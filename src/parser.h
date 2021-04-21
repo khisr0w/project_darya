@@ -32,6 +32,9 @@ enum node_type
 	NodeType_if_node,
 	NodeType_other_node,
 	NodeType_else_node,
+	NodeType_while_node,
+	NodeType_out_node,
+	NodeType_ignore_node,
 	NodeType_string_node,
 
 	// NodeType_end_of_file_node,
@@ -177,6 +180,14 @@ struct else_node
 	node_pos Pos;
 
 	node *Body;
+};
+
+struct while_node
+{
+	node_pos Pos;
+
+	node *Body;
+	node *Condition;
 };
 
 struct function_def_node

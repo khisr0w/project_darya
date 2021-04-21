@@ -17,8 +17,9 @@ If you are an experienced C/C++ developer, with knowledge of programming languag
 - The code for the translation layer will be modular so that anyone can use the interperter and tranform it to recongize any UTF-8 compliant text as a viable instruction.
 - (Still cooking) The language will have a binding to C/C++ programming language that would allow it to utilize the native platform funcitionalities for heavy-computations, such as rendering graphics and numerial calcualtions in data science applications.
 - Binding to the [numpy](https://github.com/numpy/numpy) library, entirely written in C/C++
-- Ability to build executables(exe/dmg/app/apk) that would run independently of the interpreter.
-- Making of a standalone interpreter for ARM NEON architecture that would be deployed to android mobile phones as well as Rasberry Pi (Raspbian/Linux)
+- Ability to build executables(exe/dmg/app/apk) that would run independently of the interpreter
+- Making of a standalone interpreter for ARM architecture that would be deployed to android mobile phones as well as Rasberry Pi (Raspbian/Linux)
+- Support for 64-bit mode with SIMD (for intel) and NEON (for ARM) capabilities for expensive calculations
 
 ## TODOs
 - More Precise floating point conversion from string to float and vice versa
@@ -35,4 +36,5 @@ If you are an experienced C/C++ developer, with knowledge of programming languag
 - Clean up after each statement is done, and the blocks must be freed after each 5 statements
 
 ## BINARY
+The binaries are not intended for production use:
 [Project Darya Binaries](https://github.com/Khisrow1/project_darya/releases)

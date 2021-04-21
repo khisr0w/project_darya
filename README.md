@@ -1,5 +1,5 @@
 # Project Darya (v0.01)
-An interpreted programming language (in alpha stage) made specifically for the purpose of teaching programming to students of Non-English communities.
+An interpreted programming language (in alpha stage) made specifically for the purpose of teaching programming/data science to students of Non-English communities.
 Targeted specifically towards Afghan school kids.\
 The Project is written **entirely from scratch** with no external libraries involved, even C runtime library functions are not included in the code.
 

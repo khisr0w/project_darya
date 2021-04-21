@@ -6,7 +6,7 @@ The Project is written **entirely from scratch** with no external libraries invo
 ## Notice
 The project is still in heavy development and so inexperienced users are discouraged to use it as their de-facto programming exercise.\
 If you are an experienced C/C++ developer, with knowledge of programming language development, we can work together to finish the project faster.\
-\
+
 ## Features in development
 1. The language will consist of a **Translation Layer** capable to translating UTF-8 compliant language instructions into the native ANSI code of the interpreter.
 2. The code for the translation layer will be modular so that anyone can use the interperter and tranform it to recongize any UTF-8 compliant text as a viable instruction.

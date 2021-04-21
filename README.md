@@ -4,7 +4,8 @@ Targeted specifically towards Afghan school kids.\
 The Project is written **entirely from scratch** with no external libraries involved, even C runtime library functions are not included in the code.
 
 ## Example
-`/*
+`
+/*
    Test program to check the smallest between two numbers
 */
 

@@ -10,7 +10,6 @@
 /* NOTE(Khisrow): BUGS!!!
 
    TODO(Khisrow):
-       - String SUPPORT!!!!
        - More Precise floating point conversion from string to float and vice versa
 	   - Robust power operation; handle wrapping around 32 bit and scientific notation of big numbers
 	   - MUST decide whether a fixed starting memory is a good idea for this or not?
@@ -254,7 +253,7 @@ int main(int argc, char *argv[])
 		}
 		else
 		{
-#if 0
+#if 1
 			TextMemory = PlatformOpenSourceFile(argv[1]);
 #else
 			TextMemory = PlatformOpenSourceFile("./example.da");

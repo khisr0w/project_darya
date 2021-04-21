@@ -5,7 +5,7 @@ The Project is written **entirely from scratch** with no external libraries invo
 
 ## Examples
 Example code to find the minimum number
-![Example code to find the minimum number](/msc/example_min.jpg)
+![Example code to find the minimum number](/msc/example_min.jpg)\
 Gradient descent of a simple loss function $f(x) = x^2 + x + 1$  
 ![Gradient descent of a simple loss function](/msc/example_gradient_descent.jpg)
 ## Notice

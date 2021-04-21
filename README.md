@@ -33,3 +33,6 @@ If you are an experienced C/C++ developer, with knowledge of programming languag
 - Power operation is unstable and possibly unusable at this point and must fixed!
 - Float-String conversion is extremely unstable and must be amended with a better algorithm
 - Clean up after each statement is done, and the blocks must be freed after each 5 statements
+
+## BINARY
+[Project Darya Binaries](https://github.com/Khisrow1/project_darya/releases)

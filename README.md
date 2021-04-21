@@ -10,7 +10,7 @@ Gradient descent of a simple loss function f(x) = x^2 + x + 1\
 ![Gradient descent of a simple loss function](/msc/example_gradient_descent.jpg)
 ## Notice
 The project is still in heavy development and so inexperienced users are discouraged to use it as their de-facto programming exercise.\
-If you are an experienced C/C++ developer, with knowledge of programming language development, we can work together to finish the project faster.\
+If you are an experienced C/C++ developer, with knowledge of programming language development, we can work together to finish the project faster.
 
 ## Features in development
 - The language will consist of a **Translation Layer** capable to translating UTF-8 compliant language instructions into the native ANSI code of the interpreter.

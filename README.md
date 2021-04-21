@@ -4,7 +4,7 @@ Targeted specifically towards Afghan school kids.\
 The Project is written **entirely from scratch** with no external libraries involved, even C runtime library functions are not included in the code.
 
 ## Example
-
+![Example code to find the minimum number](/msc/example_min.jpg)
 ## Notice
 The project is still in heavy development and so inexperienced users are discouraged to use it as their de-facto programming exercise.\
 If you are an experienced C/C++ developer, with knowledge of programming language development, we can work together to finish the project faster.\

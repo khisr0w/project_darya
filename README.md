@@ -3,6 +3,32 @@ An interpreted programming language (in alpha stage) made specifically for the p
 Targeted specifically towards Afghan school kids.\
 The Project is written **entirely from scratch** with no external libraries involved, even C runtime library functions are not included in the code.
 
+## Example
+`/*
+   Test program to check the smallest between two numbers
+*/
+
+var a = 2.93
+var b = 2.93
+var title = "Finding The Small Value of two numbers"
+print("==============", title, "==============")
+ 
+if(a < b)
+{
+	print('a is smaller')
+}
+other(a == b)
+{
+	print("Both numbers are equal")
+}
+else
+{
+	print("b is the smaller number")
+}
+
+// print(a+b, b-a)
+input()
+`
 ## Notice
 The project is still in heavy development and so inexperienced users are discouraged to use it as their de-facto programming exercise.\
 If you are an experienced C/C++ developer, with knowledge of programming language development, we can work together to finish the project faster.\

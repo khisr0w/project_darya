@@ -3,7 +3,7 @@ An interpreted programming language (in alpha stage) made specifically for the p
 Targeted specifically towards Afghan school/at risk kids.\
 The Project is written **entirely from scratch** with no external libraries involved, even C runtime library functions are not included in the code.
 ### Note:
-This is an alpha version of the language that's been made public under MIT license. The fully-fledged language is being built as a closed source project and will be open sourced once it hits the beta stage of development.\
+This is an alpha version of the language that's been made public under BSD 2-Clause "Simplified" License. The fully-fledged language is being built as a closed source project and will be open sourced once it hits the beta stage of development.\
 ## Examples
 Example code to find the minimum number\
 ![Example code to find the minimum number](/msc/example_min.jpg)\

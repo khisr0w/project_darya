@@ -2,7 +2,8 @@
 An interpreted programming language (in alpha stage) made specifically for the purpose of teaching programming/data science to students of Non-English communities.
 Targeted specifically towards Afghan school/at risk kids.\
 The Project is written **entirely from scratch** with no external libraries involved, even C runtime library functions are not included in the code.
-
+### Note:
+This is alpha version of the language that has been made public under MIT license. The language is being built as a closed source project and will be open sourced once it hits the beta stage of development.\
 ## Examples
 Example code to find the minimum number\
 ![Example code to find the minimum number](/msc/example_min.jpg)\
